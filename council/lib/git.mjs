@@ -6,9 +6,27 @@ import { execFileSync } from 'node:child_process';
 
 export class GitError extends Error {}
 
+// Variables that tell git WHICH repository to use. A git hook exports them
+// (pre-push sets GIT_DIR, and others in some setups), and git honours them over
+// `cwd`, so a detector run from a release hook would read the hook's repository
+// instead of the one it was given. Everything else (PATH, HOME, ssh settings)
+// passes through.
+const REPO_LOCATING = new Set([
+    'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_PREFIX', 'GIT_NAMESPACE',
+]);
+
+export function cleanGitEnv(env = process.env) {
+    const out = {};
+    for (const [key, value] of Object.entries(env)) {
+        if (!REPO_LOCATING.has(key.toUpperCase())) out[key] = value;
+    }
+    return out;
+}
+
 export function git(repo, args, { allowFail = false } = {}) {
     try {
-        return execFileSync('git', args, { cwd: repo, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+        return execFileSync('git', args, { cwd: repo, env: cleanGitEnv(), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
         if (allowFail) {
             return null;

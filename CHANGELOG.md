@@ -61,3 +61,14 @@ and verified, not required. Nothing to migrate; this is the first version.
   backoff and dead-letter.
 - A consumer seed: MOIC with its declared Prism set, and the Fancy consumers
   from the design, `escalate` by default.
+
+### Fixed
+
+- The detector reads the repository it was given even when run from a git hook.
+  A hook exports `GIT_DIR` (and in some setups `GIT_WORK_TREE`/`GIT_INDEX_FILE`),
+  which git honours over the working directory, so every read went to the
+  hook's repository. `council/lib/git.mjs` now strips the repository-locating
+  variables before running git (`cleanGitEnv`); everything else, including
+  PATH and ssh settings, passes through. The test fixtures do the same: run
+  inside the release pre-push hook they had written their `git init` and
+  `git config` into the repository being released. Nothing for a consumer to do.

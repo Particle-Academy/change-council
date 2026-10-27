@@ -8,12 +8,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { cleanGitEnv } from '../lib/git.mjs';
+
 export const CHECK = join(dirname(fileURLToPath(import.meta.url)), '..', 'check.mjs');
 
 export function makeRepo(t) {
     const dir = mkdtempSync(join(tmpdir(), 'council-fixture-'));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
-    const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    // cleanGitEnv: fixtures must be built in THIS directory even when the suite
+    // runs inside a git hook that exports GIT_DIR (the release preflight does).
+    const git = (...args) => execFileSync('git', args, { cwd: dir, env: cleanGitEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     git('init', '-q', '-b', 'main');
     git('config', 'user.email', 'fixture@example.com');
     git('config', 'user.name', 'Fixture');
