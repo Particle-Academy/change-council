@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-27
+
 Phases 1 and 2 of the design (`.ai/plans/change-council.md`). **Nothing gates a
 release yet**: the detector is report-only and the decision record is written
 and verified, not required. Nothing to migrate; this is the first version.
