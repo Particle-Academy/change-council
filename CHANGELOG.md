@@ -34,9 +34,14 @@ and verified, not required. Nothing to migrate; this is the first version.
 - **The ledger** (Laravel): Changes, rounds, petitions, votes, consumers,
   decisions, and an append-only, hash-chained audit log (model guard, SQLite
   triggers, `council:verify-log`).
-- Initiation per the owner rulings: agent finding, whitelisted agent request,
-  or GitHub issue. Non-whitelisted initiations and every issue wait for the
-  owner (HITL) with a required pros/cons summary; no petition leaves first.
+- Initiation per the owner rulings: agent finding, agent request, or GitHub
+  issue. Whitelisted initiators (agents, or an issue's author) open round 1;
+  every non-whitelisted initiation waits for the owner (HITL) with a required
+  pros/cons summary, and no petition leaves first.
+- Owner decisions (approve or reject an initiation, override, revoke, silence
+  policy) are reachable only through the JSON API behind the host's `owner`
+  ability, i.e. the authenticated lab UI. There is no artisan command for any
+  of them, because an agent can run any command with any flag.
 - Two rounds with frozen, digest-bound approaches; tally with one 24h extension;
   a per-consumer silence policy (`escalate` default, `proceed_and_notify` with
   late votes recorded) and a per-Change owner override; owner override at any

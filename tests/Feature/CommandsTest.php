@@ -69,16 +69,62 @@ test('council:tally closes due rounds; council:status shows the state', function
         ->and(runCommand('council:status'))->toContain('CC-fancy-0001')->toContain('approved');
 });
 
-test('council:decide is the owner path from a terminal: owners only, reason required', function (): void {
+/*
+ * Owner decisions go through the authenticated lab UI only. An agent can run
+ * any artisan command and pass any flag, so no command may reach an owner
+ * method of the ledger at all.
+ */
+const OWNER_METHODS = ['approveInitiation', 'rejectInitiation', 'override', 'revoke', 'setSilencePolicy', 'setChangeSilencePolicy'];
+
+test('no artisan command calls an owner method of the ledger', function (): void {
+    $files = glob(dirname(__DIR__, 2).'/src/Console/*.php') ?: [];
+    expect($files)->not->toBeEmpty();
+
+    foreach ($files as $file) {
+        $source = file_get_contents($file);
+        foreach (OWNER_METHODS as $method) {
+            expect(preg_match('/->\s*'.$method.'\s*\(/', $source))->toBe(0, basename($file)." calls {$method}()");
+        }
+    }
+});
+
+test('there is no council:decide command, and no registered command is an owner path', function (): void {
+    $names = array_map(fn (string $class) => app($class)->getName(), \ChangeCouncil\Laravel\CouncilServiceProvider::COMMANDS);
+
+    expect($names)->not->toContain('council:decide')
+        ->and(class_exists(\ChangeCouncil\Console\DecideCommand::class))->toBeFalse();
+});
+
+test('running every command with owner-shaped flags records no owner decision', function (): void {
     propose();
+    propose(['title' => 'hitl', 'source' => 'agent_request', 'initiator' => 'x@y', 'pros' => 'p', 'cons' => 'c']);
+    $owner = ['--owner' => 'owner@example.com', '--reason' => 'agent says so', '--decision' => 'approve'];
 
-    [$notOwner] = runCommandWithCode('council:decide', ['ref' => 'CC-fancy-0001', 'decision' => 'reject', '--owner' => 'agent@fancy', '--reason' => 'x']);
-    [$noReason] = runCommandWithCode('council:decide', ['ref' => 'CC-fancy-0001', 'decision' => 'reject', '--owner' => 'owner@example.com']);
-    runCommand('council:decide', ['ref' => 'CC-fancy-0001', 'decision' => 'reject', '--owner' => 'owner@example.com', '--reason' => 'Not this release.']);
+    foreach (\ChangeCouncil\Laravel\CouncilServiceProvider::COMMANDS as $class) {
+        $command = app($class);
+        $definition = $command->getDefinition();
+        $args = [];
+        foreach ($definition->getArguments() as $argument) {
+            $args[$argument->getName()] = $argument->getName() === 'ref' ? 'CC-fancy-0002' : 'approve';
+        }
+        foreach ($owner as $flag => $value) {
+            if ($definition->hasOption(ltrim($flag, '-'))) {
+                $args[$flag] = $value;
+            }
+        }
+        if ($command->getName() === 'council:push-feed' || $command->getName() === 'council:detect') {
+            continue; // network-free by construction; detect needs a repo
+        }
+        try {
+            runCommandWithCode($command->getName(), $args);
+        } catch (Throwable) {
+            // A command refusing loudly is fine; what matters is what it wrote.
+        }
+    }
 
-    expect($notOwner)->toBe(2)
-        ->and($noReason)->toBe(2)
-        ->and(Change::query()->value('state'))->toBe(States::REJECTED);
+    expect(\ChangeCouncil\Models\AuditEvent::query()->where('actor', 'like', 'owner:%')->count())->toBe(0)
+        ->and(\ChangeCouncil\Models\Decision::query()->where('decided_by', 'like', 'owner:%')->count())->toBe(0)
+        ->and(Change::query()->where('ref', 'CC-fancy-0002')->value('state'))->toBe(States::AWAITING_OWNER);
 });
 
 test('council:export writes the signed record into the target repo', function (): void {

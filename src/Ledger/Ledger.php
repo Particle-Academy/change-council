@@ -22,9 +22,10 @@ use Illuminate\Support\Carbon;
  * audit events; nothing else writes a Change's state. See {@see States}.
  *
  * Owner methods take the owner's lab identity and record `owner:<id>`. The
- * ledger cannot tell an owner from an agent on its own: callers (the HTTP API
- * behind the host's `owner` ability, `council:decide --owner` against
- * `council.owners`) are where that is enforced.
+ * ledger cannot tell an owner from an agent on its own, so the ONLY caller of
+ * an owner method is the HTTP API behind the host's `owner` ability (the
+ * authenticated lab UI). No artisan command calls one: an agent can run any
+ * command with any flag. `CommandsTest` enforces that.
  */
 final class Ledger
 {
@@ -64,9 +65,12 @@ final class Ledger
         $classes = array_values(array_filter((array) ($input['classes'] ?? []), 'is_string'));
         $packages = $this->packages($input['packages'] ?? null);
 
-        // Computed here, never taken from the input.
+        // Computed here, never taken from the input. Owner ruling q_5e39ab76:
+        // whitelisted contributors (agents, or GitHub authors for an issue)
+        // initiate straight into round 1; everything non-whitelisted goes to
+        // the owner first.
         $whitelisted = $this->whitelist->initiator($input['source'], $input['initiator']);
-        $hitl = ! $whitelisted || $input['source'] === 'github_issue';
+        $hitl = ! $whitelisted;
         $pros = trim((string) ($input['pros'] ?? ''));
         $cons = trim((string) ($input['cons'] ?? ''));
         if ($hitl && ($pros === '' || $cons === '')) {

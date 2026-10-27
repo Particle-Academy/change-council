@@ -33,7 +33,13 @@ Two halves in one repo:
   transition is one transaction plus audit events through `Audit\AuditLog`.
   States and the transition diagram are in `Ledger\States`.
 - Whitelisting is computed in `propose()` from `Ledger\Whitelist`, never read
-  from input. `github_issue` always goes to `awaiting_owner`.
+  from input. For `github_issue` the initiator is the issue author's login,
+  checked against the GitHub author list; a whitelisted author opens round 1
+  like a whitelisted agent. Anything non-whitelisted goes to `awaiting_owner`.
+- Owner methods (`approveInitiation`, `rejectInitiation`, `override`,
+  `revoke`, `setSilencePolicy`, `setChangeSilencePolicy`) are called ONLY from
+  `Http\Api` behind the `owner` ability. Never from `src/Console`: an agent can
+  run any command with any flag. `CommandsTest` scans for it.
 - `Petitions\Ingest` is the only writer of votes. Order: replay check, flags,
   strict parse (`ReplyParser`), nonce lookup, sender match, change/round/digest
   match, open-or-catch-up, then store. The tally reads only `counted` votes and

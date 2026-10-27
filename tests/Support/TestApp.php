@@ -58,7 +58,6 @@ final class TestApp
                     'public_keys' => [],
                 ],
                 'whitelist' => ['agents' => ['fancy@fancy-agi'], 'github_authors' => ['wishborn'], 'github_authors_file' => null],
-                'owners' => ['owner@example.com'],
                 'lab_url' => 'https://lab.example.test/council',
             ],
         ]);

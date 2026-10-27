@@ -27,8 +27,10 @@ Two halves, one repo:
   unless the owner has set that consumer to `proceed_and_notify` (it proceeds,
   and the consumer's late vote is still recorded).
 - **Agents petition; the owner decides.** A whitelisted agent's finding or
-  request opens round 1. Anything else, and every GitHub issue, waits for the
-  owner with the initiating agent's pros and cons. No petition leaves first.
+  request, or an issue from a whitelisted author, opens round 1. Anything
+  non-whitelisted waits for the owner with the initiating agent's pros and
+  cons. No petition leaves first. Owner decisions are made in the
+  authenticated lab UI only; no artisan command can record one.
 - **Replies are data.** Strict JSON, bound to the round by nonce and digest,
   identified by the Genie-stamped sender, flagged for injection, rendered as
   text, never applied.

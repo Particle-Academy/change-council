@@ -39,7 +39,6 @@ final class CouncilServiceProvider extends ServiceProvider
         Console\PetitionsCommand::class,
         Console\IngestCommand::class,
         Console\TallyCommand::class,
-        Console\DecideCommand::class,
         Console\StatusCommand::class,
         Console\ExportCommand::class,
         Console\VerifyLogCommand::class,

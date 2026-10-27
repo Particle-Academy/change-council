@@ -32,7 +32,7 @@ final class Council
      * Until this is called every route answers 403.
      *
      *     Council::authorizeUsing(fn ($user, string $ability, array $subject): bool =>
-     *         $ability === 'owner' ? in_array($user->email, config('council.owners'), true) : $user !== null);
+     *         $ability === 'owner' ? $user->can('council-owner') : $user !== null);
      *
      * @param  Closure(mixed, string, array): bool  $callback
      */

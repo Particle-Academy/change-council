@@ -51,12 +51,29 @@ test('a non-whitelisted initiation without a pros/cons summary is refused', func
     'no cons' => [['cons' => '  ']],
 ]);
 
-test('a GitHub issue always goes to HITL, even from a whitelisted author', function (): void {
-    $change = propose(['source' => 'github_issue', 'initiator' => 'wishborn', 'pros' => 'p', 'cons' => 'c', 'links' => ['issue' => 'https://github.com/Particle-Academy/prism/issues/9']]);
+test('a GitHub issue from a whitelisted author initiates like a whitelisted request: round 1, flag kept, no pros/cons needed', function (): void {
+    $change = propose(['source' => 'github_issue', 'initiator' => 'wishborn', 'links' => ['issue' => 'https://github.com/Particle-Academy/prism/issues/9']]);
+
+    expect($change->state)->toBe(States::ROUND1_OPEN)
+        ->and($change->whitelisted)->toBeTrue()
+        ->and(TestApp::$transport->recipients())->toBe(['moic@moic-suite']);
+});
+
+test('a GitHub issue from a non-whitelisted author always goes to HITL, with a required pros/cons summary', function (): void {
+    expect(fn () => propose(['source' => 'github_issue', 'initiator' => 'outside-contributor']))->toThrow(Refused::class, 'pros_cons_required');
+
+    $change = propose(['source' => 'github_issue', 'initiator' => 'outside-contributor', 'pros' => 'p', 'cons' => 'c']);
 
     expect($change->state)->toBe(States::AWAITING_OWNER)
-        ->and($change->whitelisted)->toBeTrue()
+        ->and($change->whitelisted)->toBeFalse()
         ->and(Petition::query()->count())->toBe(0);
+});
+
+test('an agent address is not a GitHub login: a whitelisted agent filing as github_issue is not whitelisted', function (): void {
+    $change = propose(['source' => 'github_issue', 'initiator' => 'fancy@fancy-agi', 'pros' => 'p', 'cons' => 'c']);
+
+    expect($change->state)->toBe(States::AWAITING_OWNER)
+        ->and($change->whitelisted)->toBeFalse();
 });
 
 test('a whitelisted flag in the input is ignored: the ledger decides who is whitelisted', function (): void {

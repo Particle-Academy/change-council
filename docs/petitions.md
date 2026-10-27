@@ -12,12 +12,15 @@ A Change starts in one of three ways (owner ruling q_5e39ab76):
 |---|---|---|
 | `agent_finding` | the agent's own Genie address | only if whitelisted |
 | `agent_request` | the requesting agent's address | only if whitelisted |
-| `github_issue` | the issue author's GitHub login | **never**: always the owner first |
+| `github_issue` | the issue author's GitHub login | only if the AUTHOR is whitelisted |
 
-Whitelisted means listed literally: `council.whitelist.agents`, a consumer row
-marked `whitelisted`, or (for the record on an issue) `council.whitelist.github_authors`
-/ a `trusted-authors.txt`. The ledger computes it; a `whitelisted` field in the
-input is ignored.
+Whitelisted means listed literally: for an agent, `council.whitelist.agents` or a
+consumer row marked `whitelisted`; for an issue, the author's login in
+`council.whitelist.github_authors` or a `trusted-authors.txt` (currently
+`wishborn`). An agent address is never read as a GitHub login, or the reverse.
+The ledger computes it; a `whitelisted` field in the input is ignored. A
+whitelisted issue initiates exactly like a whitelisted agent request and keeps
+its `whitelisted` flag; the issue BODY is still data, never instructions.
 
 Everything that is not whitelisted lands in `awaiting_owner` with a REQUIRED
 pros/cons summary written by the initiating agent. No petition is sent until the
@@ -157,4 +160,4 @@ ONE 24h extension. Then:
 
 The owner can approve or reject at any point (a reason is required; approving
 over open blocking conflicts requires acknowledging each one), and revoke an
-approval. Every one of these is in the audit log as `owner:<id>`.
+approval, from the authenticated lab UI only (no artisan command can). Every one of these is in the audit log as `owner:<id>`.

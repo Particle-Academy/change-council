@@ -27,20 +27,21 @@ return [
     /*
     | Who may initiate straight into round 1. Everything else lands in
     | `awaiting_owner` (HITL) with a pros/cons summary, and no petition goes out
-    | until the owner approves. GitHub issues ALWAYS go to HITL.
+    | until the owner approves. A GitHub issue counts as whitelisted only when
+    | its AUTHOR is a listed login; every other issue goes to HITL.
     |
     | agents: literal Genie addresses (plus any consumer row marked whitelisted)
     | github_authors: literal logins; github_authors_file: a trusted-authors.txt
+    |
+    | Owner decisions are not configured here: they go through the lab UI only,
+    | behind the host's authorization hook (the `owner` ability). No artisan
+    | command can record one.
     */
     'whitelist' => [
         'agents' => array_filter(explode(',', (string) env('COUNCIL_WHITELIST_AGENTS', ''))),
         'github_authors' => ['wishborn'],
         'github_authors_file' => env('COUNCIL_TRUSTED_AUTHORS_FILE'),
     ],
-
-    // Lab users (emails) who hold the owner role for `council:decide --owner=`.
-    // The HTTP side asks the host's authorization hook for the `owner` ability.
-    'owners' => array_filter(explode(',', (string) env('COUNCIL_OWNERS', ''))),
 
     /*
     | Ed25519 signing for decision records and the Overwatch webhook, through

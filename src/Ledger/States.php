@@ -7,8 +7,8 @@ namespace ChangeCouncil\Ledger;
 /**
  * The Change lifecycle (design 6.1, as amended by the 2026-10-27 owner rulings):
  *
- *   propose -> awaiting_owner     (non-whitelisted initiation, or any GitHub issue: HITL)
- *           -> round1_open        (whitelisted initiation)
+ *   propose -> awaiting_owner     (non-whitelisted initiation, agent or GitHub issue: HITL)
+ *           -> round1_open        (whitelisted initiation: agent, or GitHub issue author)
  *   awaiting_owner -> round1_open | rejected                   (owner)
  *   round1_open -> approved                 (tally: no blocking conflict, no escalating silence)
  *               -> awaiting_revision        (a blocker/major conflict)

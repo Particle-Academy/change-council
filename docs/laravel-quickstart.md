@@ -19,7 +19,6 @@ COUNCIL_ORIGIN=fancy
 COUNCIL_LAB_URL=https://flabs.gen/council
 COUNCIL_SIGNING_KEY=...
 COUNCIL_WHITELIST_AGENTS=fancy@fancy-agi
-COUNCIL_OWNERS=owner@example.com
 ```
 
 Prism's lab globs `./pages/**`; set `council.pages.publish_path` to
@@ -38,7 +37,7 @@ public function boot(): void
     // $ability: view | owner | feed
     // $subject: ['ref' => CC-... | null, 'address' => consumer | null]
     Council::authorizeUsing(fn ($user, string $ability, array $subject): bool => match ($ability) {
-        'owner' => in_array($user->email, config('council.owners'), true),
+        'owner' => $user->can('council-owner'),   // your own Gate: the lab's owner login
         'view' => true,
         'feed' => $user->can('read-council-feed'),
     });
@@ -48,6 +47,13 @@ public function boot(): void
 ```
 
 Only a literal `true` allows.
+
+**Owner decisions go through the lab UI only.** Approving or rejecting an
+initiation, overriding, revoking and setting a silence policy are reachable
+only through the JSON API behind the `owner` ability, i.e. from the owner's
+authenticated lab session. There is deliberately no artisan command for any of
+them: an agent can run any command with any flag, so a command-line owner path
+would be an agent path. A test enforces that no command calls an owner method.
 
 ## 3. Mount the pages
 
@@ -86,11 +92,10 @@ The ledger never calls Genie. The lab's own agent works the queue; see
 | `council:revise <ref> --by=` | initiator | Revised approach: opens round 2 |
 | `council:withdraw <ref> --by=` | initiator | Withdraw a live Change |
 | `council:status [ref] [--json]` | anyone | State of one or every Change |
-| `council:decide <ref> <decision> --owner= --reason=` | **owner only** | approve, reject, revoke, approve-initiation, reject-initiation |
 | `council:export <ref> --to=` | releaser | Write the signed decision record into a repo |
 | `council:verify-log` | anyone | Recompute the audit chain; exit 1 on a break |
-| `council:keygen` | owner | New Ed25519 pair |
-| `council:seed-consumers` | owner | Seed known consumers (idempotent) |
+| `council:keygen` | operator | New Ed25519 pair (setup, not a decision) |
+| `council:seed-consumers` | operator | Seed known consumers (idempotent; never touches a silence policy) |
 | `council:push-feed` | scheduler | Push the next feed page to Overwatch |
 
 ## JSON API (`/council/api/v1`)
