@@ -1,0 +1,55 @@
+{
+    "name": "particle-academy/change-council",
+    "description": "A consumer-agent voting ledger for major package changes: a zero-dependency change detector for CI and pre-push, and a Laravel ledger with HITL initiation, two voting rounds, per-consumer silence policy, a hash-chained audit log, Ed25519-signed decision records and a lab UI built from Fancy components.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "agents", "release", "breaking-changes", "governance", "ci", "fancy", "human-plus"],
+    "require": {
+        "php": "^8.4",
+        "ext-json": "*",
+        "ext-sodium": "*",
+        "illuminate/console": "^13.0",
+        "illuminate/container": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/routing": "^13.0",
+        "illuminate/support": "^13.0"
+    },
+    "require-dev": {
+        "laravel/framework": "^13.30",
+        "pestphp/pest": "^4.0|^5.0"
+    },
+    "suggest": {
+        "inertiajs/inertia-laravel": "Renders the lab pages (Council/Index, Council/Show) through the default InertiaPageRenderer"
+    },
+    "autoload": {
+        "psr-4": {
+            "ChangeCouncil\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ChangeCouncil\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "lint": "@php tests/lint.php"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ChangeCouncil\\Laravel\\CouncilServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

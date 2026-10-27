@@ -1,0 +1,51 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/Particle-Academy/change-council/resources/schema/feed.v1.json",
+    "title": "change-council feed v1",
+    "description": "The Overwatch feed: audit events after a cursor plus a snapshot of each Change they touched. Read-only. Additive changes (a new event type, an optional field, a new state or class) stay v1; removing or renaming anything is feed.v2, served beside v1. Reply free text is never in the feed.",
+    "type": "object",
+    "required": ["schema", "origin", "cursor", "events", "changes"],
+    "properties": {
+        "schema": { "const": "change-council/feed.v1" },
+        "origin": { "type": "string", "description": "The ledger that produced this page (one per lab), e.g. fancy, prism." },
+        "cursor": { "type": "integer", "minimum": 0, "description": "Pass as ?since= to get the next page. Equal to the request's since when there is nothing new." },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/change" } }
+    },
+    "$defs": {
+        "event": {
+            "type": "object",
+            "required": ["seq", "at", "change", "actor", "type", "data", "hash"],
+            "properties": {
+                "seq": { "type": "integer", "minimum": 1, "description": "Gap-free audit sequence." },
+                "at": { "type": "string", "description": "UTC, microseconds: 2026-10-27T12:00:00.000000Z" },
+                "change": { "type": ["string", "null"], "description": "CC-<origin>-NNNN, or null for registry events." },
+                "actor": { "type": "string", "description": "An agent address, `owner:<id>`, `tally`, `clerk` or `ledger`." },
+                "type": { "type": "string", "description": "e.g. change.proposed, round.opened, petition.queued, vote.recorded, round.extended, round.closed, change.approved, change.escalated, owner.override. Unknown types must be ignored, not rejected." },
+                "data": { "type": "object", "description": "Structured fields only; a `note` or `reason` is replaced by a placeholder." },
+                "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "This event's link in the audit hash chain." }
+            }
+        },
+        "change": {
+            "type": "object",
+            "required": ["ref", "origin", "title", "state", "current_round", "classes", "packages", "initiation_source", "whitelisted", "approved_unopposed", "approved_with_notes", "late_conflict", "decided_by", "decided_at", "updated_at"],
+            "properties": {
+                "ref": { "type": "string" },
+                "origin": { "type": "string" },
+                "title": { "type": "string" },
+                "state": { "type": "string", "description": "awaiting_owner | round1_open | awaiting_revision | round2_open | escalated | approved | rejected | withdrawn | revoked. New states are additive." },
+                "current_round": { "type": ["integer", "null"] },
+                "classes": { "type": "array", "items": { "type": "string" } },
+                "packages": { "type": "array", "items": { "type": "object", "required": ["ecosystem", "name"] } },
+                "initiation_source": { "type": "string", "enum": ["agent_finding", "agent_request", "github_issue"] },
+                "whitelisted": { "type": "boolean" },
+                "approved_unopposed": { "type": "boolean" },
+                "approved_with_notes": { "type": "boolean" },
+                "late_conflict": { "type": "boolean" },
+                "decided_by": { "type": ["string", "null"] },
+                "decided_at": { "type": ["string", "null"] },
+                "updated_at": { "type": ["string", "null"] }
+            }
+        }
+    }
+}

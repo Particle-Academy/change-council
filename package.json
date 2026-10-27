@@ -1,0 +1,13 @@
+{
+    "name": "change-council-detector",
+    "private": true,
+    "description": "The change-council detector: zero-dependency Node (built-ins only). Not published; CI fetches council/check.mjs pinned by SHA and content hash.",
+    "type": "module",
+    "scripts": {
+        "test": "node --test \"council/test/*.test.mjs\"",
+        "detect": "node council/check.mjs"
+    },
+    "engines": {
+        "node": ">=22"
+    }
+}

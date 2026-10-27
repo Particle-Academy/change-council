@@ -1,0 +1,46 @@
+{
+    "schema": "change-council/decision.v1",
+    "ref": "CC-fancy-0007",
+    "origin": "fancy",
+    "state": "approved",
+    "decided_by": "tally",
+    "decided_at": "2026-10-30T12:00:00Z",
+    "approved_unopposed": false,
+    "packages": [
+        {
+            "ecosystem": "composer",
+            "name": "particle-academy/fancy-flow-php"
+        }
+    ],
+    "covers": {
+        "versions": ">=0.52.0 <0.53.0",
+        "fingerprints": [
+            "3d3d2534afbe88c901afd799b885e6edf0d889787742e575442de52142ad67ad"
+        ]
+    },
+    "waivers": [
+        {
+            "fingerprint": "974c7677feb60b129b2575cae1c87ca243960cd86392b633c01119d62eb7c2fc",
+            "kind": "dev-only"
+        }
+    ],
+    "rounds": [
+        {
+            "number": 1,
+            "digest": "sha256:cec9111de36d4a50c3e667f6ecf2e4a69bfc1efe69c66103c57d48dfe6a9211b",
+            "outcomes": {
+                "approve": 2,
+                "conflict": 0,
+                "abstain": 1,
+                "silent": 0,
+                "unreachable": 0,
+                "undelivered": 0,
+                "invalid": 0
+            }
+        }
+    ],
+    "ledger_head": "9f2e6d33a3717ee826353a404ba4618d1aeeb6879ad7936bce8ed5f46814924d",
+    "fixture_text": "café / tab\t ctrl\u001f nl\n quote\" ls\u2028",
+    "key_id": "a7c07fb4189b2972",
+    "signature": "+f/MEp+pIFQ6weiEL/WDy9q9RBg1RdLOXjc3cBTYsctTytzysHBDCmtsrS81PSz2d3eD5M4vcmFk/IA+Ok2cDw=="
+}

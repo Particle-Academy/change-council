@@ -1,0 +1,86 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.4"]
+    name: PHP ${{ matrix.php }} + Node
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The detector's fixtures build their own repos, but the CLI's
+          # default --from walks this repo's tags.
+          fetch-depth: 0
+
+      # Third-party dependency allowlist, fetched (never vendored). Pin it by
+      # commit SHA once the org settles q_55e074ed; this job holds no secrets
+      # and no id-token, so an unpinned fetch here can at worst fail the build.
+      - name: Fetch the third-party allowlist
+        uses: actions/checkout@v7
+        with:
+          repository: Particle-Academy/.github
+          path: .third-party-allowlist
+          persist-credentials: false
+
+      - name: Third-party dependency allowlist
+        run: |
+          node .third-party-allowlist/third-party/check.mjs --repo .
+          node -e "require('node:fs').rmSync('.third-party-allowlist',{recursive:true,force:true})"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # The detector: zero dependencies, so no install step. Must-fire and
+      # must-not-fire fixture repos per class, plus the PHP-signed decision
+      # record verified in Node.
+      - name: Detector tests (node --test)
+        run: node --test "council/test/*.test.mjs"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: mbstring, dom, zip, pdo_sqlite, sodium
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      # Hermetic: in-memory SQLite and a fake petition transport. Nothing
+      # reaches Genie or the network.
+      - name: Ledger tests (Pest)
+        run: vendor/bin/pest --colors=always
+
+      - name: Lint
+        run: php tests/lint.php
+
+      - name: Validate Composer manifest
+        run: composer validate --strict
+
+      # Phase 1 dogfood: this repo's own release, reported, never failing.
+      - name: Change report (report-only)
+        run: node council/check.mjs --repo . --out council-report.json
+
+  # Rulesets require the literal "build" check.
+  build:
+    name: build
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all checks
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
