@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 Additive: nothing changes for a host that does nothing, and the authorization
 default is still deny-all. **One consumer action:** re-publish the pages
 (`php artisan vendor:publish --tag=council-pages --force`) to get the back link
