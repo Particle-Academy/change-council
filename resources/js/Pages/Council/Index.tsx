@@ -54,6 +54,7 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
     const count = (s: string) => data.changes.filter((c) => c.state === s).length;
     const open = data.changes.filter((c) => c.state === 'round1_open' || c.state === 'round2_open').length;
     const queued = data.changes.reduce((n, c) => n + c.petitions.queued, 0);
+    const needsOwner = data.changes.filter((c) => c.state === 'awaiting_owner' || c.state === 'escalated');
 
     return (
         <>
@@ -84,10 +85,24 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
                     />
                 </div>
 
-                {(count('awaiting_owner') > 0 || count('escalated') > 0) && (
+                {/* The owner's decisions are taken on each Change's own page, so
+                    every Change waiting for one gets a button there. Without it
+                    the only way in was the ref in the table, which read as text. */}
+                {needsOwner.length > 0 && (
                     <Callout color="amber" data-testid="council-needs-owner">
-                        {count('awaiting_owner')} awaiting your approval to petition, {count('escalated')} escalated to you. No petition leaves for a
-                        non-whitelisted initiation until you approve it.
+                        <div className="space-y-3">
+                            <div>
+                                {count('awaiting_owner')} awaiting your approval to petition, {count('escalated')} escalated to you. No petition leaves for a
+                                non-whitelisted initiation until you approve it.
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {needsOwner.map((c) => (
+                                    <Button data-action="council-review" key={c.ref} href={`${endpoints.show}/${c.ref}`} color="amber" size="sm" id={`council-review-${c.ref}`}>
+                                        {c.state === 'awaiting_owner' ? `Approve or reject ${c.ref}` : `Decide ${c.ref}`}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
                     </Callout>
                 )}
                 {queued > 0 && (
@@ -148,7 +163,7 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
                                     {changes.map((c) => (
                                         <Table.Row key={c.ref} data-change-ref={c.ref} data-change-state={c.state}>
                                             <Table.Cell>
-                                                <Link href={`${endpoints.show}/${c.ref}`} className="font-medium hover:underline" id={`council-open-${c.ref}`}>
+                                                <Link href={`${endpoints.show}/${c.ref}`} className="font-medium text-violet-700 underline underline-offset-2 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-100" id={`council-open-${c.ref}`}>
                                                     {c.ref}
                                                 </Link>
                                                 <div className="text-sm">{c.title}</div>

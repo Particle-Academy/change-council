@@ -15,6 +15,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+**One consumer action:** re-publish the pages
+(`php artisan vendor:publish --tag=council-pages --force`), then
+`php artisan council:pages-check` should report every file current. Nothing
+else changes; an old published copy keeps working, it just keeps the defect.
+
+### Fixed
+- **The list page gave the owner nothing to press.** Owner decisions are taken
+  on a Change's own page, and the only way there from `/council` was the ref in
+  the table, drawn as plain text that underlined on hover only. The "awaiting
+  your approval" callout linked nowhere. On the first live lab an owner sat on
+  the list for hours with a Change waiting, believing there was no way to act,
+  and no owner event was ever recorded. The callout now carries one button per
+  Change awaiting the owner or escalated to them (`data-action="council-review"`,
+  "Approve or reject CC-..." / "Decide CC-..."), and every ref in the table is
+  drawn as a link.
+
 ## [0.2.0] - 2026-10-29
 
 Additive: nothing changes for a host that does nothing, and the authorization

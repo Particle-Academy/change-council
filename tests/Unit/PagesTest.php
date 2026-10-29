@@ -74,6 +74,34 @@ test('the list page sets a consumer\'s silence policy itself, only for an owner,
         ->and($index)->toContain('/silence-policy`');
 });
 
+/*
+ * The owner actions live on the Change's own page, so the list page is the only
+ * way there. On 0.2.0 that way was the ref drawn as plain text (underlined on
+ * hover only), and the "awaiting your approval" callout linked nowhere: an
+ * owner sat on the list page for hours with a Change waiting and no visible
+ * thing to press, and no owner event was ever recorded.
+ */
+test('the list page gives every Change waiting for the owner a visible button to its page', function (): void {
+    $index = pageSources()['Index.tsx'];
+
+    // One button per Change that waits for the owner (awaiting_owner or
+    // escalated), inside the callout that says so, pointing at its page.
+    expect($index)->toMatch('/data-testid="council-needs-owner"[\s\S]*?data-action="council-review"/')
+        ->and($index)->toMatch('/<Button\b[^>]*data-action="council-review"[^>]*href=\{`\$\{endpoints\.show\}\/\$\{c\.ref\}`\}/s')
+        ->and($index)->toMatch("/c\\.state === 'awaiting_owner' \\|\\| c\\.state === 'escalated'/");
+});
+
+test('the list page draws each ref as a link, not as text that underlines on hover', function (): void {
+    $index = pageSources()['Index.tsx'];
+
+    preg_match('/<Link\b[^>]*id=\{`council-open-[^>]*>/s', $index, $m);
+    expect($m)->not->toBeEmpty();
+    preg_match('/className="([^"]*)"/', $m[0], $cls);
+    $classes = explode(' ', $cls[1] ?? '');
+    expect($classes)->toContain('underline')
+        ->and(array_filter($classes, static fn (string $c): bool => str_starts_with($c, 'text-') && ! str_starts_with($c, 'text-sm')))->not->toBeEmpty();
+});
+
 test('every interactive element carries a stable handle', function (): void {
     foreach (pageSources() as $name => $source) {
         preg_match_all('/<(Button|Select|Input|Textarea|Checkbox)\b[^>]*>/s', $source, $m);
