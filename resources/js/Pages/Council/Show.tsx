@@ -1,21 +1,17 @@
 import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Checkbox, CodeView, Heading, Modal, Select, Table, Tabs, Text, Textarea, Timeline } from '@particle-academy/react-fancy';
 import { useState } from 'react';
-import { type Detail, type Finding, type PetitionRow, type Policy, type RoundRow, send, usePoll, type Vote } from './parts/api';
-import { label, severityTone, stateTone, verdictTone } from './parts/tone';
+import { type Detail, type Finding, type HostLink, type PetitionRow, type Policy, type RoundRow, send, usePoll, type Vote } from './parts/api';
+import { label, POLICIES, severityTone, stateTone, verdictTone } from './parts/tone';
 
 type Props = {
     detail: Detail;
     pollMs: number;
+    host: HostLink;
     endpoints: { index: string; detail: string; owner: string; changeSilencePolicy: string; consumers: string };
 };
 
 type Action = 'approve_initiation' | 'reject_initiation' | 'approve' | 'reject' | 'revoke';
-
-const POLICIES: { value: string; label: string }[] = [
-    { value: 'escalate', label: 'escalate to the owner' },
-    { value: 'proceed_and_notify', label: 'proceed, notify on catch-up' },
-];
 
 /**
  * Council/Show: one Change. Every free-text field from a reply (reason, note,
@@ -23,7 +19,7 @@ const POLICIES: { value: string; label: string }[] = [
  * whitespace-pre-wrap, or a read-only CodeView. Never HTML, never rendered
  * markup, so a reply cannot draw links, images or fake UI here.
  */
-export default function Show({ detail: initial, pollMs, endpoints }: Props) {
+export default function Show({ detail: initial, pollMs, host, endpoints }: Props) {
     const [detail, setDetail, pollError] = usePoll<Detail>(endpoints.detail, initial, pollMs);
     // A HITL initiation has no rounds yet; its pros and cons are on Overview.
     const [tab, setTab] = useState(initial.change.state === 'awaiting_owner' ? 'overview' : 'rounds');
@@ -50,9 +46,16 @@ export default function Show({ detail: initial, pollMs, endpoints }: Props) {
             <Head title={`${c.ref} - Change council`} />
             <div className="mx-auto max-w-7xl space-y-6 p-6" data-surface="council-show" data-change-ref={c.ref} data-change-state={c.state}>
                 <div className="space-y-2">
-                    <Link href={endpoints.index} className="text-sm text-zinc-500 hover:underline" id="council-back">
-                        All Changes
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                        {host && (
+                            <Button data-action="council-host" href={host.url} variant="ghost" size="sm" id="council-host">
+                                {host.label}
+                            </Button>
+                        )}
+                        <Link href={endpoints.index} className="text-sm text-zinc-500 hover:underline" id="council-back">
+                            All Changes
+                        </Link>
+                    </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <Heading as="h1" size="2xl" weight="semibold">
                             {c.ref}

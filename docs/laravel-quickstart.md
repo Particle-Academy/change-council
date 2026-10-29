@@ -19,6 +19,7 @@ COUNCIL_ORIGIN=fancy
 COUNCIL_LAB_URL=https://flabs.gen/council
 COUNCIL_SIGNING_KEY=...
 COUNCIL_WHITELIST_AGENTS=fancy@fancy-agi
+COUNCIL_OWNERS=owner@example.com
 ```
 
 Prism's lab globs `./pages/**`; set `council.pages.publish_path` to
@@ -28,25 +29,51 @@ Prism's lab globs `./pages/**`; set `council.pages.publish_path` to
 
 Every route asks your hook. Until you register one, every route answers 403.
 
+The ledger is the owner's, so the documented default is **owner-only**: name
+the owner logins in `COUNCIL_OWNERS` and opt into the package's authorizer.
+
+```dotenv
+COUNCIL_OWNERS=owner@example.com            # comma-separated login emails
+```
+
 ```php
 // app/Providers/AppServiceProvider.php
 use ChangeCouncil\Facades\Council;
 
 public function boot(): void
 {
-    // $ability: view | owner | feed
-    // $subject: ['ref' => CC-... | null, 'address' => consumer | null]
-    Council::authorizeUsing(fn ($user, string $ability, array $subject): bool => match ($ability) {
-        'owner' => $user->can('council-owner'),   // your own Gate: the lab's owner login
-        'view' => true,
-        'feed' => $user->can('read-council-feed'),
-    });
-
-    Council::routes(); // prefix and middleware from config/council.php (web, auth)
+    Council::authorizeOwners(); // council.owners get view, owner and feed; nobody else gets anything
+    Council::routes();          // prefix and middleware from config/council.php (web, auth)
 }
 ```
 
-Only a literal `true` allows.
+Emails are compared trimmed and case-insensitively. **An empty list allows
+nobody**: there is no "any signed-in user" fallback. `authorizeOwners()` also
+defines a `council-owner` Gate (unless you defined one), so the host can draw
+its own link with `$user->can('council-owner')`.
+
+**Why not let every signed-in user view?** Because on a host with open
+registration, "signed in" proves nothing: anyone can register and then read
+every Change, every consumer's reply and the audit log. For the same reason,
+list an owner email only once that account exists on the host; an unclaimed
+owner email is one anybody could register.
+
+If you need something else (a reader role, a machine token for the `feed`), register your own hook
+instead. It replaces the owners authorizer entirely, and the same rule holds:
+grant `view` to a role you control, never to "authenticated".
+
+```php
+// $ability: view | owner | feed
+// $subject: ['ref' => CC-... | null, 'address' => consumer | null]
+Council::authorizeUsing(fn ($user, string $ability, array $subject): bool => match ($ability) {
+    'owner', 'view' => $user?->can('council-owner') === true,
+    'feed' => $user?->can('read-council-feed') === true,
+    default => false,
+});
+```
+
+Only a literal `true` allows. A host that registers neither keeps the default,
+which denies everything; `council.owners` is not read unless you opt in.
 
 **Owner decisions go through the lab UI only.** Approving or rejecting an
 initiation, overriding, revoking and setting a silence policy are reachable
@@ -65,6 +92,23 @@ for pages.
 
 The pages poll the JSON API every 15s at most, and not at all while the tab is
 hidden: a lab is served by one php-cgi worker.
+
+Both pages draw a link back to the host app at the top: `council.host_url`
+(env `COUNCIL_HOST_URL`, default `/`) labelled `council.host_label`
+(env `COUNCIL_HOST_LABEL`, default "Back to the app"). An empty URL hides it.
+
+**The published pages are a copy.** A package upgrade does not change them, so
+after every `composer update` that moves change-council, check them:
+
+```bash
+php artisan council:pages-check     # exit 1 when a page is stale or missing
+php artisan vendor:publish --tag=council-pages --force   # to refresh them
+```
+
+Run the check in CI, or assert it in your own suite with
+`ChangeCouncil\Laravel\PublishedPages::check($dir)` (every value must be
+`current`). Line endings are ignored. A copy you edited on purpose reports
+`stale` too, because it is not what the package ships.
 
 ## 4. Schedule
 
@@ -97,6 +141,7 @@ The ledger never calls Genie. The lab's own agent works the queue; see
 | `council:keygen` | operator | New Ed25519 pair (setup, not a decision) |
 | `council:seed-consumers` | operator | Seed known consumers (idempotent; never touches a silence policy) |
 | `council:push-feed` | scheduler | Push the next feed page to Overwatch |
+| `council:pages-check [--path=]` | operator, CI | Are the published pages the ones this version ships? (read-only) |
 
 ## JSON API (`/council/api/v1`)
 

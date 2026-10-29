@@ -13,6 +13,30 @@ return [
     // Where a petition tells the agent it can read the Change.
     'lab_url' => env('COUNCIL_LAB_URL', 'https://flabs.gen/council'),
 
+    /*
+    | Who owns the ledger: login emails, comma-separated in COUNCIL_OWNERS,
+    | compared trimmed and case-insensitively. Read ONLY by the opt-in owners
+    | authorizer (`Council::authorizeOwners()`), which gives these users every
+    | ability (view, owner, feed) and everyone else none. A host that registers
+    | its own hook with `Council::authorizeUsing()` does not read this list.
+    |
+    | Empty means NOBODY. There is no "any signed-in user" fallback: on a host
+    | with open registration, signing in proves nothing about who you are. For
+    | the same reason, list an email only once its account exists on the host;
+    | an unclaimed owner email is one anybody could register.
+    */
+    'owners' => array_values(array_filter(
+        array_map('trim', explode(',', (string) env('COUNCIL_OWNERS', ''))),
+        static fn (string $email): bool => $email !== '',
+    )),
+
+    /*
+    | The way back to the host app, drawn at the top of both lab pages.
+    | An empty URL hides the link.
+    */
+    'host_url' => env('COUNCIL_HOST_URL', '/'),
+    'host_label' => env('COUNCIL_HOST_LABEL', 'Back to the app'),
+
     // Round deadlines, in hours. Silent required voters get ONE extension.
     'deadlines' => [
         'round1_hours' => 72,

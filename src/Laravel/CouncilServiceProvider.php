@@ -48,6 +48,7 @@ final class CouncilServiceProvider extends ServiceProvider
         Console\PushFeedCommand::class,
         Console\ReviseCommand::class,
         Console\WithdrawCommand::class,
+        Console\PagesCheckCommand::class,
     ];
 
     public function register(): void

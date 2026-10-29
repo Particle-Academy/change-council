@@ -6,6 +6,7 @@ namespace ChangeCouncil\Laravel;
 
 use ChangeCouncil\Http\Api;
 use ChangeCouncil\Http\ApiResponse;
+use ChangeCouncil\Http\Authorizer;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class PageController
 {
-    public function __construct(private readonly Api $api, private readonly PageRenderer $renderer, private readonly Repository $config) {}
+    public function __construct(private readonly Api $api, private readonly PageRenderer $renderer, private readonly Repository $config, private readonly Authorizer $authorizer) {}
 
     public function index(Request $request): Response
     {
@@ -34,9 +35,14 @@ final class PageController
             'consumers' => $consumers->status === 200 ? $consumers->body['consumers'] : [],
             'filters' => (object) $filters,
             'pollMs' => $this->pollMs(),
+            'host' => $this->host(),
+            // Draws the silence-policy control. Display only: the PUT asks the
+            // same hook again, for the consumer it names.
+            'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => null]),
             'endpoints' => [
                 'changes' => $this->url('api/v1/changes'),
                 'show' => $this->url('changes'),
+                'consumers' => $this->url('api/v1/consumers'),
             ],
         ]);
     }
@@ -51,6 +57,7 @@ final class PageController
         return $this->renderer->render($request, 'Council/Show', [
             'detail' => $detail->body,
             'pollMs' => $this->pollMs(),
+            'host' => $this->host(),
             'endpoints' => [
                 'index' => $this->url(''),
                 'detail' => $this->url('api/v1/changes/'.$ref),
@@ -65,6 +72,18 @@ final class PageController
     {
         // Never faster than 15s: a lab is served by ONE php-cgi worker.
         return max(15000, (int) $this->config->get('council.pages.poll_ms', 15000));
+    }
+
+    /** @return array{url: string, label: string}|null the way back to the host app; null hides it */
+    private function host(): ?array
+    {
+        $url = trim((string) $this->config->get('council.host_url', '/'));
+        if ($url === '') {
+            return null;
+        }
+        $label = trim((string) $this->config->get('council.host_label', 'Back to the app'));
+
+        return ['url' => $url, 'label' => $label === '' ? 'Back to the app' : $label];
     }
 
     private function url(string $path): string

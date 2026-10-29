@@ -145,6 +145,22 @@ function runCommand(string $name, array $arguments = []): string
     return $output;
 }
 
+/**
+ * One request through the real router, as `$user`.
+ *
+ * @return array{status: int, body: array, raw: string}
+ */
+function http(string $method, string $uri, ?array $body = null, ?\ChangeCouncil\Tests\Support\User $user = null): array
+{
+    $content = $body === null ? '' : json_encode($body, JSON_THROW_ON_ERROR);
+    $request = \Illuminate\Http\Request::create('/council'.$uri, $method, [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'], $content);
+    app()->instance('request', $request);
+    $request->setUserResolver(fn () => $user);
+    $response = app('router')->dispatch($request);
+
+    return ['status' => $response->getStatusCode(), 'body' => json_decode((string) $response->getContent(), true) ?? [], 'raw' => (string) $response->getContent()];
+}
+
 /** Move the clock past the current round's deadline (and extension, if any). */
 function pastDeadline(Change $change, int $extraHours = 1): void
 {

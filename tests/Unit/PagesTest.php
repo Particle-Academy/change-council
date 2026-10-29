@@ -54,6 +54,26 @@ test('polling is slow and visibility-gated', function (): void {
         ->and($sources)->toMatch('/Math\.max\(\s*15_?000/');
 });
 
+test('both pages draw the way back to the host, and hide it when there is none', function (): void {
+    foreach (['Index.tsx', 'Show.tsx'] as $name) {
+        $source = pageSources()[$name];
+        // toContain is variadic (every argument is a needle), so the file name
+        // goes in toMatch's message slot only.
+        expect($source)->toMatch('/data-action="council-host"/', $name)
+            ->and($source)->toMatch('/host\s*&&/', $name)
+            ->and($source)->toMatch('/href=\{host\.url\}/', $name);
+    }
+});
+
+test('the list page sets a consumer\'s silence policy itself, only for an owner, and no longer points at the raw API', function (): void {
+    $index = pageSources()['Index.tsx'];
+
+    expect($index)->not->toContain('via the API')
+        ->and($index)->toContain('data-field="consumer-silence-policy"')
+        ->and($index)->toMatch('/canSetPolicy\s*\?/')
+        ->and($index)->toContain('/silence-policy`');
+});
+
 test('every interactive element carries a stable handle', function (): void {
     foreach (pageSources() as $name => $source) {
         preg_match_all('/<(Button|Select|Input|Textarea|Checkbox)\b[^>]*>/s', $source, $m);

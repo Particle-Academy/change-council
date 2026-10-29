@@ -51,6 +51,9 @@ Two halves in one repo:
 - `Http\Api` is framework-free; `Laravel\CouncilController` adds only the body
   limit, JSON decoding and the user. Every route asks `Http\Authorizer`
   (default `DenyAll`); only a literal `true` from a callback allows.
+  `Http\OwnersAuthorizer` (`Council::authorizeOwners()`) is the opt-in
+  owner-only hook over `council.owners`; an empty list allows nobody. It is
+  never bound by default.
 - `Models\AuditEvent` throws on update/delete; the migration adds SQLite
   triggers. `AuditLog::verify()` reads raw rows, not models.
 - `Feed\Feed` never emits reply free text (it masks `note`/`reason`).
@@ -63,6 +66,9 @@ React and `@inertiajs/react`; reply text renders as `Text` or a read-only
 `CodeView`, never HTML. `tests/Unit/PagesTest.php` enforces these, the slow
 visibility-gated poll, and a `data-action`/`data-field` handle on every control
 (put it FIRST in the tag: the check stops at the first `>`).
+Hosts publish COPIES of these files; `Laravel\PublishedPages` and
+`council:pages-check` compare a host's copy with the shipped one, so any
+change here is a "re-publish the pages" line in the CHANGELOG.
 
 ## Tests
 

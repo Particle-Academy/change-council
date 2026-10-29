@@ -59,9 +59,12 @@ MAJOR (2)
 ```php
 use ChangeCouncil\Facades\Council;
 
-Council::authorizeUsing(fn ($user, string $ability, array $subject): bool => /* view | owner | feed */);
+Council::authorizeOwners(); // COUNCIL_OWNERS=owner@example.com; an empty list allows nobody
 Council::routes();
 ```
+
+Owner-only on purpose: on a host with open registration, "any signed-in user"
+is anyone. See the [quick start](docs/laravel-quickstart.md#2-authorization-and-routes).
 
 ## Docs
 

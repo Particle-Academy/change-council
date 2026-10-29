@@ -104,6 +104,9 @@ export type Detail = {
 
 export type Policy = 'escalate' | 'proceed_and_notify';
 
+/** The way back to the host app (config council.host_url / host_label); null when the host hides it. */
+export type HostLink = { url: string; label: string } | null;
+
 export type ConsumerRow = {
     address: string;
     packages: Package[];

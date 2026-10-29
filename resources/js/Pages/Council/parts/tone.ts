@@ -37,4 +37,10 @@ export function severityTone(severity: string): Tone {
     return 'amber';
 }
 
-export const label = (value: string): string => value.replace(/_/g, ' ');
+/** The two silence policies, as Select options. */
+export const POLICIES: { value: string; label: string }[] = [
+    { value: 'escalate', label: 'escalate to the owner' },
+    { value: 'proceed_and_notify', label: 'proceed, notify on catch-up' },
+];
+
+export const label =(value: string): string => value.replace(/_/g, ' ');

@@ -1,25 +1,40 @@
 import { Head, Link } from '@inertiajs/react';
-import { Badge, Callout, Card, Heading, Input, Select, StatList, Table, Text } from '@particle-academy/react-fancy';
+import { Badge, Button, Callout, Card, Heading, Input, Select, StatList, Table, Text } from '@particle-academy/react-fancy';
 import { useMemo, useState } from 'react';
-import { type ConsumerRow, type Summary, usePoll } from './parts/api';
-import { label, STATES, stateTone } from './parts/tone';
+import { type ConsumerRow, type HostLink, send, type Summary, usePoll } from './parts/api';
+import { label, POLICIES, STATES, stateTone } from './parts/tone';
 
 type Props = {
     changes: Summary[];
     consumers: ConsumerRow[];
     filters: { state?: string; package?: string; class?: string };
     pollMs: number;
-    endpoints: { changes: string; show: string };
+    host: HostLink;
+    /** Whether the hook allows `owner` for this viewer. Display only: the API asks again. */
+    canSetPolicy: boolean;
+    endpoints: { changes: string; show: string; consumers: string };
 };
 
 /**
  * Council/Index: every Change, filterable, polled slowly. Built only from Fancy
  * components. Nothing here renders text as HTML.
  */
-export default function Index({ changes: initial, consumers, filters, pollMs, endpoints }: Props) {
+export default function Index({ changes: initial, consumers: initialConsumers, filters, pollMs, host, canSetPolicy, endpoints }: Props) {
     const [state, setState] = useState(filters.state ?? '');
     const [pkg, setPkg] = useState(filters.package ?? '');
     const [cls, setCls] = useState(filters.class ?? '');
+    const [consumers, setConsumers] = useState(initialConsumers);
+    const [message, setMessage] = useState<string | null>(null);
+
+    // A consumer-wide silence policy, set here for every consumer, including
+    // one no Change has petitioned yet. The server answers with the saved row.
+    const setPolicy = async (address: string, policy: string) => {
+        const answer = await send<{ consumer: ConsumerRow }>('PUT', `${endpoints.consumers}/${encodeURIComponent(address)}/silence-policy`, { policy });
+        if (answer.ok) {
+            setConsumers((rows) => rows.map((row) => (row.address === address ? answer.json.consumer : row)));
+        }
+        setMessage(answer.ok ? `Silence policy for ${address} saved.` : `Refused: ${answer.json.error?.code ?? answer.status}`);
+    };
 
     const query = new URLSearchParams({ ...(state ? { state } : {}), ...(pkg ? { package: pkg } : {}), ...(cls ? { class: cls } : {}) }).toString();
     const [data, , pollError] = usePoll<{ changes: Summary[] }>(`${endpoints.changes}${query ? `?${query}` : ''}`, { changes: initial }, pollMs);
@@ -46,6 +61,11 @@ export default function Index({ changes: initial, consumers, filters, pollMs, en
             <div className="mx-auto max-w-7xl space-y-6 p-6" data-surface="council-index">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
+                        {host && (
+                            <Button data-action="council-host" href={host.url} variant="ghost" size="sm" id="council-host">
+                                {host.label}
+                            </Button>
+                        )}
                         <Heading as="h1" size="2xl" weight="semibold">
                             Change council
                         </Heading>
@@ -73,6 +93,11 @@ export default function Index({ changes: initial, consumers, filters, pollMs, en
                 {queued > 0 && (
                     <Callout color="red" data-testid="council-queue">
                         {queued} petition(s) are queued and not yet sent. The clerk sends them with php artisan council:petitions.
+                    </Callout>
+                )}
+                {message && (
+                    <Callout color="blue" dismissible onDismiss={() => setMessage(null)} data-testid="council-message">
+                        {message}
                     </Callout>
                 )}
                 {pollError && (
@@ -191,7 +216,8 @@ export default function Index({ changes: initial, consumers, filters, pollMs, en
                             Consumers
                         </Heading>
                         <Text color="muted" size="sm">
-                            Who gets petitioned. Silence policy is per consumer; set it on a Change's page or here via the API.
+                            Who gets petitioned, and what happens when a required voter stays silent. The policy here applies to every Change; a
+                            Change's own page can override it for that Change only.
                         </Text>
                         <Table className="overflow-x-auto" data-testid="council-consumers">
                             <Table.Head>
@@ -225,9 +251,20 @@ export default function Index({ changes: initial, consumers, filters, pollMs, en
                                         </Table.Cell>
                                         <Table.Cell className="text-xs">{c.packages.map((p) => p.name).join(', ') || '-'}</Table.Cell>
                                         <Table.Cell>
-                                            <Badge color={c.silence_policy === 'escalate' ? 'amber' : 'blue'} variant="soft">
-                                                {label(c.silence_policy)}
-                                            </Badge>
+                                            {canSetPolicy ? (
+                                                <Select
+                                                    data-field="consumer-silence-policy"
+                                                    id={`council-consumer-policy-${c.address}`}
+                                                    aria-label={`Silence policy for ${c.address}`}
+                                                    value={c.silence_policy}
+                                                    onValueChange={(value) => value !== c.silence_policy && void setPolicy(c.address, value)}
+                                                    list={POLICIES}
+                                                />
+                                            ) : (
+                                                <Badge color={c.silence_policy === 'escalate' ? 'amber' : 'blue'} variant="soft">
+                                                    {label(c.silence_policy)}
+                                                </Badge>
+                                            )}
                                         </Table.Cell>
                                         <Table.Cell className="text-xs text-zinc-500">{c.census_at ?? 'never'}</Table.Cell>
                                     </Table.Row>

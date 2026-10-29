@@ -15,6 +15,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Additive: nothing changes for a host that does nothing, and the authorization
+default is still deny-all. **One consumer action:** re-publish the pages
+(`php artisan vendor:publish --tag=council-pages --force`) to get the back link
+and the silence-policy control; then `php artisan council:pages-check` should
+report every file current. An old published copy keeps working against this
+version (it ignores the new props), it just lacks both.
+
+### Added
+- **`council.owners`** (env `COUNCIL_OWNERS`, comma-separated login emails) and
+  an opt-in owner-only authorizer, `Council::authorizeOwners()`. Owners get
+  every ability (view, owner, feed); everyone else gets none. Emails are
+  compared trimmed and case-insensitively, and **an empty list allows nobody**.
+  It also defines a `council-owner` Gate unless the host already has one. These
+  are the semantics fancy-labs built for itself, so a host doing the same can
+  switch to this and drop its own class. A host that registers its own hook
+  with `Council::authorizeUsing()`, or none, is unaffected: `council.owners` is
+  read only by the opt-in authorizer. Note for a host that already publishes
+  its own `owners` key in `config/council.php`: it is the same key, so it is
+  picked up unchanged.
+- **A way back to the host** on both lab pages: `council.host_url` (env
+  `COUNCIL_HOST_URL`, default `/`) and `council.host_label` (env
+  `COUNCIL_HOST_LABEL`, default "Back to the app"). An empty URL hides it.
+- **The consumer silence policy is set on the list page.** `Council/Index`
+  draws a `Select` per consumer when the hook allows `owner` for the viewer
+  (a new `canSetPolicy` prop; the write is still authorized by the API), so the
+  owner can set the policy for a consumer no Change has petitioned yet, which
+  the per-Change page could not reach.
+- **`council:pages-check [--path=]`** and `ChangeCouncil\Laravel\PublishedPages::check()`:
+  compare a host's published pages with the ones this version ships, by
+  content with line endings normalised, and exit 1 when any file is stale or
+  missing. Read-only. Run it in CI after `composer update`, or assert it in the
+  host's own suite.
+
+### Fixed
+- **The documented authorization sample was unsafe.** The quick start allowed
+  `view` for any signed-in user, which on a host with open registration hands
+  the ledger (every Change, every reply, the audit log) to anyone who
+  registers. The quick start, the README and the `authorizeUsing()` docblock
+  now show the owner-only setup and say why. A test fails if a documented
+  sample grants `view` unconditionally again. If you copied the old sample,
+  replace it: switch to `Council::authorizeOwners()` or grant `view` to a role
+  you control.
+- The list page said the silence policy could be set "here via the API". It is
+  now set here, on the page (see Added).
+
 ## [0.1.0] - 2026-10-27
 
 Phases 1 and 2 of the design (`.ai/plans/change-council.md`). **Nothing gates a

@@ -6,35 +6,13 @@ use ChangeCouncil\Facades\Council;
 use ChangeCouncil\Laravel\PageRenderer;
 use ChangeCouncil\Ledger\States;
 use ChangeCouncil\Models\Consumer;
+use ChangeCouncil\Tests\Support\JsonPageRenderer;
 use ChangeCouncil\Tests\Support\User;
-use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
 
 /*
  * The JSON API and the lab pages, through the real router. Every route asks
  * the host's authorization hook; with none registered, everything is refused.
  */
-
-/** @return array{status: int, body: array, raw: string} */
-function http(string $method, string $uri, ?array $body = null, ?User $user = null): array
-{
-    $content = $body === null ? '' : json_encode($body, JSON_THROW_ON_ERROR);
-    $request = Request::create('/council'.$uri, $method, [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'], $content);
-    app()->instance('request', $request);
-    $request->setUserResolver(fn () => $user);
-    $response = app('router')->dispatch($request);
-
-    return ['status' => $response->getStatusCode(), 'body' => json_decode((string) $response->getContent(), true) ?? [], 'raw' => (string) $response->getContent()];
-}
-
-/** A renderer that returns the page name and props as JSON, standing in for Inertia. */
-final class JsonPageRenderer implements PageRenderer
-{
-    public function render(Request $request, string $component, array $props): Response
-    {
-        return new \Illuminate\Http\JsonResponse(['component' => $component, 'props' => $props]);
-    }
-}
 
 function httpApp(?Closure $authorize = null): void
 {
@@ -180,6 +158,46 @@ test('the pages render Council/Index and Council/Show with their props and the p
         ->and($show['component'])->toBe('Council/Show')
         ->and($show['props']['detail']['change']['ref'])->toBe('CC-fancy-0001')
         ->and($show['props']['endpoints']['detail'])->toBe('/council/api/v1/changes/CC-fancy-0001');
+});
+
+test('both pages carry a way back to the host: "/" by default, or council.host_url and council.host_label', function (): void {
+    httpApp(fn (): bool => true);
+    propose();
+    $user = User::create(['name' => 'Ada']);
+
+    expect(http('GET', '', null, $user)['body']['props']['host'])->toBe(['url' => '/', 'label' => 'Back to the app'])
+        ->and(http('GET', '/changes/CC-fancy-0001', null, $user)['body']['props']['host'])->toBe(['url' => '/', 'label' => 'Back to the app']);
+
+    app('config')->set('council.host_url', '/labs');
+    app('config')->set('council.host_label', 'Back to the lab');
+    expect(http('GET', '', null, $user)['body']['props']['host'])->toBe(['url' => '/labs', 'label' => 'Back to the lab'])
+        ->and(http('GET', '/changes/CC-fancy-0001', null, $user)['body']['props']['host'])->toBe(['url' => '/labs', 'label' => 'Back to the lab']);
+
+    // An empty URL hides the link rather than drawing one that goes nowhere.
+    app('config')->set('council.host_url', '');
+    expect(http('GET', '', null, $user)['body']['props']['host'])->toBeNull();
+});
+
+test('the list page is told whether the viewer may set a silence policy, by asking the hook for `owner`', function (): void {
+    $asked = [];
+    httpApp(function (mixed $user, string $ability) use (&$asked): bool {
+        $asked[] = $ability;
+
+        return $ability === 'view' || $user->email === 'owner@example.com';
+    });
+    $owner = User::create(['name' => 'Ada', 'email' => 'owner@example.com']);
+    $viewer = User::create(['name' => 'Eve', 'email' => 'eve@example.com']);
+
+    $ownerProps = http('GET', '', null, $owner)['body']['props'];
+    $viewerProps = http('GET', '', null, $viewer)['body']['props'];
+
+    expect($ownerProps['canSetPolicy'])->toBeTrue()
+        ->and($viewerProps['canSetPolicy'])->toBeFalse()
+        ->and($ownerProps['endpoints']['consumers'])->toBe('/council/api/v1/consumers')
+        ->and($asked)->toContain('owner')
+        // The flag only decides what is drawn: the API still refuses Eve.
+        ->and(http('PUT', '/api/v1/consumers/moic@moic-suite/silence-policy', ['policy' => 'proceed_and_notify'], $viewer)['status'])->toBe(403)
+        ->and(http('PUT', '/api/v1/consumers/moic@moic-suite/silence-policy', ['policy' => 'proceed_and_notify'], $owner)['body']['consumer']['silence_policy'])->toBe('proceed_and_notify');
 });
 
 test('without inertia installed, the default page renderer answers 501 instead of a blank page', function (): void {

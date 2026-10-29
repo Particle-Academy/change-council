@@ -7,7 +7,12 @@ Two Inertia pages, built only from Fancy components (react-fancy: `Table`,
 - **`Council/Index`**: every Change with state, classes, packages, vote counts
   and deadline; filters by state, package and class; a stat row; callouts for
   Changes awaiting the owner or escalated, and for petitions still queued for
-  the clerk; the consumer registry with each silence policy and census age.
+  the clerk; the consumer registry with census age and each consumer's silence
+  policy, which an owner sets right there (a `Select` drawn only when the hook
+  allows `owner`; the API asks the hook again on the write). It covers every
+  consumer, including one no Change has petitioned yet.
+- **Both pages** start with a link back to the host app (`council.host_url`,
+  `council.host_label`; an empty URL hides it).
 - **`Council/Show`**: one Change. Owner actions (approve or reject a HITL
   initiation, approve or reject by override, revoke) open a modal that requires
   a reason and, when approving over open blocking conflicts, a checkbox per
