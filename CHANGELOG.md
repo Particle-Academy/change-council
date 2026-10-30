@@ -15,6 +15,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-30
+
+**Consumer action: none.**
+
+### Fixed
+- **A delivered petition was recorded as `undelivered`.** `council:petitions
+  --mark-sent --result=...` only understood the JSON-RPC-wrapped tool result
+  (`result.content[].text`). The clerk's agentinbox tool hands back the BARE
+  result, `{"ok":true,"delivered":1,...}`, and on the first live round
+  (CC-fancy-0001) both petitions were confirmed delivered by Genie yet ledgered
+  as undelivered. The bare verdict is now read directly: `ok: true` with a
+  positive (or absent) `delivered` count is `sent`; `ok: false` keeps its error
+  and the reachability rule; `delivered: 0` is not a delivery. The three
+  wrapped refusal depths are unchanged.
+
 ## [0.2.1] - 2026-10-29
 
 **One consumer action:** re-publish the pages

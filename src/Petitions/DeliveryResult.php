@@ -29,6 +29,17 @@ final readonly class DeliveryResult
         if (isset($body['error'])) {
             return self::refused(is_array($body['error']) ? (string) ($body['error']['message'] ?? 'error') : (string) $body['error']);
         }
+        // The bare tool result, as the agentinbox tool hands it to the clerk:
+        // `{"ok": true, "delivered": 1, ...}` with no JSON-RPC envelope. The
+        // first live round was pasted this way and read as undelivered. The
+        // verdict object IS the body; `delivered: 0` is not a delivery.
+        if (! array_key_exists('result', $body) && array_key_exists('ok', $body) && ! array_is_list($body)) {
+            if ($body['ok'] === true && (! array_key_exists('delivered', $body) || (is_int($body['delivered']) && $body['delivered'] > 0))) {
+                return new self('sent', null);
+            }
+
+            return self::refused(is_string($body['error'] ?? null) && $body['error'] !== '' ? $body['error'] : 'no delivery was confirmed');
+        }
         $result = is_array($body['result'] ?? null) ? $body['result'] : [];
         $texts = [];
         foreach ((array) ($result['content'] ?? []) as $block) {

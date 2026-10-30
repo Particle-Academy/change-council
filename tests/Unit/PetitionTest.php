@@ -76,4 +76,10 @@ test('a delivery verdict is read at all three refusal depths; anything unconfirm
     'prose with braces and no verdict' => ['{"result":{"content":[{"type":"text","text":"The format is {provider}:{name}"}]}}', 'undelivered'],
     'not JSON at all' => ['sent it, trust me', 'undelivered'],
     'permission denied' => ['{"result":{"content":[{"type":"text","text":"{\"ok\":false,\"error\":\"permission denied: agent is not reachable\"}"}]}}', 'unreachable'],
+    // The bare result the agentinbox tool hands the clerk, as pasted on the
+    // first live round (CC-fancy-0001, 2026-10-30): it was read as undelivered.
+    'bare tool result ok true' => ['{"ok":true,"delivered":1,"messageId":"msg_x","attachments":[]}', 'sent'],
+    'bare tool result ok false' => ['{"ok":false,"error":"No agent matches x"}', 'undelivered'],
+    'bare tool result ok true but delivered 0' => ['{"ok":true,"delivered":0,"messageId":"msg_x"}', 'undelivered'],
+    'bare tool result unreachable' => ['{"ok":false,"error":"permission denied: agent is not reachable"}', 'unreachable'],
 ]);
