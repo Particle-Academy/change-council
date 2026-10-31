@@ -57,6 +57,18 @@ Two halves in one repo:
 - `Models\AuditEvent` throws on update/delete; the migration adds SQLite
   triggers. `AuditLog::verify()` reads raw rows, not models.
 - `Feed\Feed` never emits reply free text (it masks `note`/`reason`).
+- `Notify\OwnerEventNotifier` (default `NullNotifier`) is told about owner
+  events. `Ledger::notifyAfterCommit()` queues it with `afterCommit()` at each
+  transition point:
+  - `approveInitiation`, `rejectInitiation`, `override` and `revoke`;
+  - `close()`, once per closed round, plus `escalated`.
+
+  An `OwnerEvent` holds refs, states, codes and counts, never free text. A
+  throwing notifier is swallowed and audited as `notify.failed`.
+  `Notify\GenieInboxNotifier` reads `GENIE_INBOX_URL`/`_TOKEN` with `getenv()`
+  at send time, never config. It audits event, ref and status only, never
+  throws and never retries. Opt in with `Council::notifyUsing()`,
+  `Council::notifyGenie()` or `council.notify.genie`.
 
 ## The pages
 

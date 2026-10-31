@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ChangeCouncil\Console;
 
+use ChangeCouncil\Council;
 use ChangeCouncil\Http\Presenter;
 use ChangeCouncil\Ledger\Ledger;
 use ChangeCouncil\Models\Change;
@@ -13,12 +14,22 @@ final class StatusCommand extends Command
 {
     use Concerns;
 
-    protected $signature = 'council:status {ref? : One Change in detail} {--json : Print JSON}';
+    protected $signature = 'council:status {ref? : One Change in detail} {--json : Print JSON} {--notifier : Only the owner-event notifier: bound, and Genie env present (booleans only)}';
 
     protected $description = 'Show Changes and their state, or one Change in detail';
 
-    public function handle(Ledger $ledger, Presenter $presenter): int
+    public function handle(Ledger $ledger, Presenter $presenter, Council $council): int
     {
+        $notifier = $council->notifierStatus();
+        if ($this->option('notifier')) {
+            if ($this->option('json')) {
+                $this->emitJson($notifier);
+            } else {
+                $this->line(self::notifierLine($notifier));
+            }
+
+            return 0;
+        }
         $ref = $this->argument('ref');
         if (is_string($ref) && $ref !== '') {
             $change = $this->change($ledger, $ref);
@@ -51,7 +62,16 @@ final class StatusCommand extends Command
         foreach ($rows as $r) {
             $this->line(sprintf('%-16s %-18s %s', $r['ref'], $r['state'], $r['title']));
         }
+        $this->line(self::notifierLine($notifier));
 
         return 0;
+    }
+
+    /** @param array{bound: bool, notifier: string, env: array<string, bool>} $status */
+    private static function notifierLine(array $status): string
+    {
+        $env = array_map(fn (string $name, bool $present) => $name.' '.($present ? 'present' : 'missing'), array_keys($status['env']), $status['env']);
+
+        return 'notifier: '.$status['notifier'].' ('.($status['bound'] ? 'bound' : 'not bound').'); '.implode('; ', $env);
     }
 }

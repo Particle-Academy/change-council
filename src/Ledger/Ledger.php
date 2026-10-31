@@ -11,6 +11,9 @@ use ChangeCouncil\Models\Decision;
 use ChangeCouncil\Models\Petition;
 use ChangeCouncil\Models\Round;
 use ChangeCouncil\Models\Vote;
+use ChangeCouncil\Notify\NullNotifier;
+use ChangeCouncil\Notify\OwnerEvent;
+use ChangeCouncil\Notify\OwnerEventNotifier;
 use ChangeCouncil\Petitions\DeliveryResult;
 use ChangeCouncil\Petitions\PetitionText;
 use ChangeCouncil\Transport\PetitionTransport;
@@ -40,6 +43,7 @@ final class Ledger
         private readonly PetitionTransport $transport,
         private readonly Whitelist $whitelist,
         private readonly array $settings,
+        private readonly OwnerEventNotifier $notifier = new NullNotifier,
     ) {}
 
     public function find(string $ref): ?Change
@@ -117,6 +121,7 @@ final class Ledger
             $this->expect($change, [States::AWAITING_OWNER]);
             $this->audit->append($change->id, self::owner($owner), 'initiation.approved', ['note' => $note]);
             $this->openRound($change, 1, $change->approach, self::owner($owner));
+            $this->notifyAfterCommit($change, OwnerEvent::INITIATION_APPROVED, States::AWAITING_OWNER);
 
             return $change->fresh();
         });
@@ -131,6 +136,7 @@ final class Ledger
             $this->expect($change, [States::AWAITING_OWNER]);
             $this->audit->append($change->id, self::owner($owner), 'initiation.rejected', ['reason' => $reason]);
             $this->decide($change, States::REJECTED, self::owner($owner), $reason);
+            $this->notifyAfterCommit($change, OwnerEvent::INITIATION_REJECTED, States::AWAITING_OWNER);
 
             return $change->fresh();
         });
@@ -353,6 +359,7 @@ final class Ledger
         $tally = ['counts' => $counts, 'blocking' => $blocking, 'notes' => $notes, 'escalate' => $escalate, 'catch_up' => $catchUp, 'reason' => $reason];
         $round->forceFill(['closed_at' => Carbon::now(), 'tally' => $tally, 'outcome' => $state])->save();
         $this->audit->append($change->id, 'tally', 'round.closed', ['round' => $round->number, 'outcome' => $state, 'reason' => $reason, 'counts' => $counts]);
+        $from = $change->state;
 
         if ($state === States::APPROVED) {
             $change->forceFill([
@@ -363,6 +370,10 @@ final class Ledger
         } else {
             $change->forceFill(['state' => $state])->save();
             $this->audit->append($change->id, 'tally', $state === States::AWAITING_REVISION ? 'change.revision_required' : 'change.escalated', ['reason' => $reason]);
+        }
+        $this->notifyAfterCommit($change, OwnerEvent::roundClosed($round->number), $from, $round->number, $reason, $counts);
+        if ($state === States::ESCALATED) {
+            $this->notifyAfterCommit($change, OwnerEvent::ESCALATED, $from, $round->number, $reason, $counts);
         }
 
         return 'closed';
@@ -401,10 +412,12 @@ final class Ledger
             if ($round !== null && $round->closed_at === null) {
                 $round->forceFill(['closed_at' => Carbon::now(), 'outcome' => 'owner_override'])->save();
             }
+            $from = $change->state;
             $this->audit->append($change->id, self::owner($owner), 'owner.override', [
-                'decision' => $decision, 'reason' => $reason, 'from_state' => $change->state, 'acknowledged' => $acknowledge,
+                'decision' => $decision, 'reason' => $reason, 'from_state' => $from, 'acknowledged' => $acknowledge,
             ]);
             $this->decide($change, $target, self::owner($owner), $reason, $decision === 'approve' ? $acknowledge : []);
+            $this->notifyAfterCommit($change, $decision === 'approve' ? OwnerEvent::OVERRIDE_APPROVE : OwnerEvent::OVERRIDE_REJECT, $from);
 
             return $change->fresh();
         });
@@ -418,6 +431,7 @@ final class Ledger
             $change = $this->lock($change);
             $this->expect($change, [States::APPROVED]);
             $this->decide($change, States::REVOKED, self::owner($owner), $reason);
+            $this->notifyAfterCommit($change, OwnerEvent::REVOKED, States::APPROVED);
 
             return $change->fresh();
         });
@@ -551,6 +565,40 @@ final class Ledger
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * Queues an owner event for AFTER the outermost transaction commits, so a
+     * rollback (here, or in a host transaction around us) never notifies. The
+     * event is built now, from the state this transaction wrote. Delivery can
+     * never fail the decision: it has committed by the time the notifier runs,
+     * so anything the notifier throws is swallowed and audited.
+     *
+     * @param  array<string, int>  $counts
+     */
+    private function notifyAfterCommit(Change $change, string $event, ?string $from, ?int $round = null, ?string $code = null, array $counts = []): void
+    {
+        if ($this->notifier instanceof NullNotifier) {
+            return;
+        }
+        $notice = new OwnerEvent($event, (string) $change->ref, (string) $change->id, (string) $change->state, $from, $round, $code, $counts);
+        $notifier = $this->notifier;
+        $audit = $this->audit;
+        $deliver = static function () use ($notice, $notifier, $audit): void {
+            try {
+                $notifier->notify($notice);
+            } catch (\Throwable) {
+                // Never the exception's message: it may carry a URL or a token.
+                try {
+                    $audit->append($notice->changeId, 'notifier', 'notify.failed', ['event' => $notice->event, 'ref' => $notice->ref, 'status' => 'exception']);
+                } catch (\Throwable) {
+                }
+            }
+        };
+        if (! method_exists($this->db, 'afterCommit')) {
+            throw new \LogicException('the owner-event notifier needs a connection with afterCommit()');
+        }
+        $this->db->afterCommit($deliver);
+    }
 
     private function decide(Change $change, string $state, string $by, ?string $reason, array $acknowledged = []): void
     {

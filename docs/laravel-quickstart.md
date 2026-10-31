@@ -123,6 +123,38 @@ Schedule::command('council:push-feed')->everyFiveMinutes();   // only with a web
 The ledger never calls Genie. The lab's own agent works the queue; see
 [petitions.md](petitions.md).
 
+## 6. Owner-event notices (optional)
+
+To tell the clerk when the owner acts, opt in. Nothing is bound by default.
+
+```php
+Council::notifyGenie();                       // or COUNCIL_NOTIFY_GENIE=true
+// Council::notifyUsing(fn (\ChangeCouncil\Notify\OwnerEvent $e) => ...);
+```
+
+The notice is sent after commit. These events are covered:
+
+- an initiation approved or rejected
+- an override
+- a revoke
+- a round's tally closed
+- an escalation
+
+`COUNCIL_NOTIFY_TO` picks the agent; empty means Genie's default. Genie gives a
+site it hosts `GENIE_INBOX_URL` and `GENIE_INBOX_TOKEN`. They are read with
+`getenv()` at send time, so a rotated token is picked up and `config:cache`
+cannot freeze one. Never copy them into `.env` or config.
+
+The notice holds refs, states and counts, never reply text. A failure is an
+audit event, never an error:
+
+- `notify.failed` with the status: a 404 means the token was rotated or
+  revoked, and a 429 records `retry_after`;
+- `notify.skipped` when the env is missing.
+
+`council:status --notifier` shows whether a notifier is bound and whether the
+env is present, as booleans only.
+
 ## Commands
 
 | Command | Who | What |
@@ -136,6 +168,7 @@ The ledger never calls Genie. The lab's own agent works the queue; see
 | `council:revise <ref> --by=` | initiator | Revised approach: opens round 2 |
 | `council:withdraw <ref> --by=` | initiator | Withdraw a live Change |
 | `council:status [ref] [--json]` | anyone | State of one or every Change |
+| `council:status --notifier [--json]` | anyone | Notifier bound? Genie env present? (booleans only) |
 | `council:export <ref> --to=` | releaser | Write the signed decision record into a repo |
 | `council:verify-log` | anyone | Recompute the audit chain; exit 1 on a break |
 | `council:keygen` | operator | New Ed25519 pair (setup, not a decision) |

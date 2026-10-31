@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 namespace ChangeCouncil;
 
+use ChangeCouncil\Audit\AuditLog;
 use ChangeCouncil\Http\Authorizer;
 use ChangeCouncil\Http\CallbackAuthorizer;
 use ChangeCouncil\Http\OwnersAuthorizer;
 use ChangeCouncil\Laravel\Routes;
 use ChangeCouncil\Ledger\Ledger;
+use ChangeCouncil\Notify\CallbackNotifier;
+use ChangeCouncil\Notify\GenieInboxNotifier;
+use ChangeCouncil\Notify\NullNotifier;
+use ChangeCouncil\Notify\OwnerEvent;
+use ChangeCouncil\Notify\OwnerEventNotifier;
 use ChangeCouncil\Petitions\Ingest;
 use Closure;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Http\Client\Factory;
 
 /** The host-facing entry point (facade {@see Facades\Council}). */
 final class Council
@@ -65,6 +72,61 @@ final class Council
                 $gate->define('council-owner', static fn (mixed $user): bool => $authorizer->includes($user));
             }
         }
+    }
+
+    /**
+     * Be told about owner events (initiation approved/rejected, override,
+     * revoke, a round's tally closed, escalation), after commit. Nothing is
+     * bound by default. A failure inside the notifier never fails the decision.
+     *
+     *     Council::notifyUsing(fn (OwnerEvent $event) => ...);
+     *
+     * @param  OwnerEventNotifier|Closure(OwnerEvent): mixed  $notifier
+     */
+    public function notifyUsing(OwnerEventNotifier|Closure $notifier): void
+    {
+        $this->container->instance(OwnerEventNotifier::class, $notifier instanceof Closure ? new CallbackNotifier($notifier) : $notifier);
+    }
+
+    /**
+     * Owner events to Genie's app inbox (the same as `council.notify.genie`).
+     * GENIE_INBOX_URL and GENIE_INBOX_TOKEN are read from the environment at
+     * send time; a missing one is a recorded skip, never an error.
+     */
+    public function notifyGenie(): void
+    {
+        $this->container->instance(OwnerEventNotifier::class, self::genieNotifier($this->container));
+    }
+
+    /** @internal the Genie notifier as configured; shared with the service provider */
+    public static function genieNotifier(Container $container): GenieInboxNotifier
+    {
+        $config = $container->make('config');
+        $to = $config->get('council.notify.to');
+
+        return new GenieInboxNotifier(
+            $container->make(Factory::class),
+            $container->make(AuditLog::class),
+            is_string($to) ? $to : null,
+            (string) $config->get('council.lab_url', ''),
+        );
+    }
+
+    /**
+     * For a status page: whether a notifier is bound and whether Genie's env
+     * is present. Booleans and a class name only, never a value.
+     *
+     * @return array{bound: bool, notifier: string, env: array{GENIE_INBOX_URL: bool, GENIE_INBOX_TOKEN: bool}}
+     */
+    public function notifierStatus(): array
+    {
+        $notifier = $this->container->make(OwnerEventNotifier::class);
+
+        return [
+            'bound' => ! $notifier instanceof NullNotifier,
+            'notifier' => (new \ReflectionClass($notifier))->getShortName(),
+            'env' => GenieInboxNotifier::envPresent(),
+        ];
     }
 
     /** @param array{prefix?: string, middleware?: list<string>} $options */

@@ -93,6 +93,20 @@ return [
         'batch' => 200,
     ],
 
+    /*
+    | Owner events (initiation approved/rejected, override, revoke, a round's
+    | tally closed, escalation) to Genie's app inbox, after commit. Off by
+    | default. Only the switch and the address live here: GENIE_INBOX_URL and
+    | GENIE_INBOX_TOKEN, which Genie gives a hosted site, are read with getenv()
+    | at send time, because config:cache would freeze a token Genie rotates.
+    | `to` empty: Genie's default agent for the workspace. The notice links to
+    | `lab_url` when that is set.
+    */
+    'notify' => [
+        'genie' => filter_var(env('COUNCIL_NOTIFY_GENIE', false), FILTER_VALIDATE_BOOL),
+        'to' => env('COUNCIL_NOTIFY_TO'),
+    ],
+
     // The optional routes: JSON API under {prefix}/api/v1 and the lab pages at
     // {prefix}. Every route asks the host's authorization hook (default: deny).
     'routes' => [

@@ -15,6 +15,67 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
+Additive: a host that does nothing is unaffected. No notifier is bound by
+default, and nothing is sent. **The lab pages are untouched, so there is no
+re-publish.** `council:pages-check` stays current.
+
+### Added
+- **Owner-event notifier** (`ChangeCouncil\Notify\OwnerEventNotifier`): an
+  optional hook that tells someone, AFTER COMMIT, when something the owner
+  cares about happens. Until now an owner decision in the lab was invisible to
+  the clerk until the clerk happened to look. It is queued with the
+  connection's after-commit hook, so a rolled-back transition (including one
+  inside a host transaction) never notifies. Events (`OwnerEvent::$event`):
+  - `initiation_approved` / `initiation_rejected`
+  - `override_approve` / `override_reject`
+  - `revoked`
+  - `round1_closed` / `round2_closed` (every closed tally)
+  - `escalated` (sent alongside the round's close when the tally escalates to
+    the owner)
+
+  An `OwnerEvent` carries refs, states, a reason code and the tally counts.
+  It never carries a title, note, reason or reply text: the same masking rule
+  as the feed. A notifier that throws never fails or rolls back the decision.
+  The exception is swallowed and recorded as a `notify.failed` audit event,
+  without its message.
+- **A Genie app-inbox implementation** (`ChangeCouncil\Notify\GenieInboxNotifier`).
+  It sends `POST {GENIE_INBOX_URL}/v1/inbox` with a bearer token and these
+  fields:
+  - `to` (optional)
+  - `subject`
+  - `body` (plain text, capped at 8 KB)
+  - `level`: `success` for approvals, `failure` for escalation, otherwise
+    `info`
+  - `link` (the Change's lab page, when `council.lab_url` is set)
+  - `dedupeKey`: `council:{ref}:{event}`
+
+  **Genie provides the env:** `GENIE_INBOX_URL` and `GENIE_INBOX_TOKEN` are
+  given to a site Genie hosts. They are read with `getenv()` AT SEND TIME and
+  never through config, because `config:cache` would freeze a token that Genie
+  rotates on every restart. They are never stored, logged or audited.
+
+  Every outcome is an audit event carrying the event, the ref and a status
+  only:
+  - a 2xx is `notify.sent`;
+  - a 404 (the token is unknown, rotated or revoked) is `notify.failed` and is
+    not retried;
+  - a 429 is `notify.failed`, with `retry_after` recorded and no blocking
+    retry;
+  - any other status is `notify.failed`;
+  - a network error is `notify.failed` with status 0;
+  - a missing env is `notify.skipped` (`env_missing`): a no-op, not an error.
+- **How a host opts in:** set `COUNCIL_NOTIFY_GENIE=true` (config
+  `council.notify.genie`) or call `Council::notifyGenie()`, and optionally
+  set `COUNCIL_NOTIFY_TO` (otherwise Genie's default agent).
+  `Council::notifyUsing($notifierOrClosure)` binds any other notifier.
+- **`council:status` reports the notifier.** The list view ends with a
+  `notifier:` line. `council:status --notifier [--json]` prints only that
+  line, and `Council::notifierStatus()` returns the same for a host status
+  page. Each shows whether a notifier is bound and whether each Genie env var
+  is present, as booleans only, never the values.
+
 ## [0.2.2] - 2026-10-30
 
 **Consumer action: none.**

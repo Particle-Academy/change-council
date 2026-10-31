@@ -18,6 +18,8 @@ use ChangeCouncil\Http\DenyAll;
 use ChangeCouncil\Http\Presenter;
 use ChangeCouncil\Ledger\Ledger;
 use ChangeCouncil\Ledger\Whitelist;
+use ChangeCouncil\Notify\NullNotifier;
+use ChangeCouncil\Notify\OwnerEventNotifier;
 use ChangeCouncil\Petitions\Ingest;
 use ChangeCouncil\Records\DecisionRecords;
 use ChangeCouncil\Records\RecordSigner;
@@ -29,7 +31,8 @@ use Illuminate\Support\ServiceProvider;
 
 /**
  * Binds the ledger's defaults. The host may rebind PetitionTransport,
- * Authorizer (default: deny all), PageRenderer and HttpSender. Nothing
+ * Authorizer (default: deny all), PageRenderer, HttpSender and
+ * OwnerEventNotifier (default: none). Nothing
  * registers routes unless the host asks.
  */
 final class CouncilServiceProvider extends ServiceProvider
@@ -59,6 +62,11 @@ final class CouncilServiceProvider extends ServiceProvider
         $this->app->singletonIf(PetitionTransport::class, fn () => new ClerkQueueTransport);
         $this->app->singletonIf(Authorizer::class, fn () => new DenyAll);
         $this->app->singletonIf(PageRenderer::class, fn () => new InertiaPageRenderer);
+        // Nothing by default. `council.notify.genie` (or Council::notifyGenie())
+        // opts into Genie's app inbox; Council::notifyUsing() binds anything else.
+        $this->app->singletonIf(OwnerEventNotifier::class, fn (Application $app) => $app['config']->get('council.notify.genie') === true
+            ? Council::genieNotifier($app)
+            : new NullNotifier);
         $this->app->bind(Whitelist::class, fn (Application $app) => new Whitelist(
             array_values((array) $app['config']->get('council.whitelist.agents', [])),
             array_values((array) $app['config']->get('council.whitelist.github_authors', [])),
@@ -78,6 +86,7 @@ final class CouncilServiceProvider extends ServiceProvider
                 'extension_hours' => (int) $app['config']->get('council.deadlines.extension_hours', 24),
                 'census_max_age_days' => (int) $app['config']->get('council.census_max_age_days', 30),
             ],
+            $app->make(OwnerEventNotifier::class),
         ));
         $this->app->bind(Ingest::class, fn (Application $app) => new Ingest($app['db']->connection(), $app->make(AuditLog::class), $app->make(Ledger::class)));
         $this->app->singleton(RecordSigner::class, fn (Application $app) => new RecordSigner(
