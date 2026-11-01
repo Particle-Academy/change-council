@@ -68,8 +68,8 @@ is anyone. See the [quick start](docs/laravel-quickstart.md#2-authorization-and-
 
 Optional, and off by default: `Council::notifyGenie()` (or
 `COUNCIL_NOTIFY_GENIE=true`) sends owner events to Genie's app inbox after
-commit. These are initiation approved or rejected, override, revoke, a closed
-tally and escalation. The notice carries refs and counts only, and a failure is
+commit. These are a proposal awaiting the owner, initiation approved or
+rejected, override, revoke, a closed tally and escalation. The notice carries refs and counts only, and a failure is
 audited, never thrown. See the
 [quick start](docs/laravel-quickstart.md#6-owner-event-notices-optional).
 

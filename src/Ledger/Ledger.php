@@ -108,6 +108,12 @@ final class Ledger
             ]);
             if (! $hitl) {
                 $this->openRound($change, 1, $change->approach, $input['initiator']);
+            } else {
+                // The only way into awaiting_owner (see States): tell the
+                // clerk, so a proposal never waits on an owner nobody told.
+                $this->notifyAfterCommit($change, OwnerEvent::AWAITING_OWNER, null, null, null,
+                    ['packages' => count($packages), 'classes' => count($classes)],
+                    $input['source'], OwnerEvent::identity($input['initiator']));
             }
 
             return $change->fresh();
@@ -575,12 +581,12 @@ final class Ledger
      *
      * @param  array<string, int>  $counts
      */
-    private function notifyAfterCommit(Change $change, string $event, ?string $from, ?int $round = null, ?string $code = null, array $counts = []): void
+    private function notifyAfterCommit(Change $change, string $event, ?string $from, ?int $round = null, ?string $code = null, array $counts = [], ?string $source = null, ?string $initiator = null): void
     {
         if ($this->notifier instanceof NullNotifier) {
             return;
         }
-        $notice = new OwnerEvent($event, (string) $change->ref, (string) $change->id, (string) $change->state, $from, $round, $code, $counts);
+        $notice = new OwnerEvent($event, (string) $change->ref, (string) $change->id, (string) $change->state, $from, $round, $code, $counts, $source, $initiator);
         $notifier = $this->notifier;
         $audit = $this->audit;
         $deliver = static function () use ($notice, $notifier, $audit): void {

@@ -60,10 +60,13 @@ Two halves in one repo:
 - `Notify\OwnerEventNotifier` (default `NullNotifier`) is told about owner
   events. `Ledger::notifyAfterCommit()` queues it with `afterCommit()` at each
   transition point:
+  - `propose()` when it lands in `awaiting_owner` (the only way into that
+    state), as `awaiting_owner`;
   - `approveInitiation`, `rejectInitiation`, `override` and `revoke`;
   - `close()`, once per closed round, plus `escalated`.
 
-  An `OwnerEvent` holds refs, states, codes and counts, never free text. A
+  An `OwnerEvent` holds refs, states, codes and counts, never free text. The
+  `awaiting_owner` initiator passes through `OwnerEvent::identity()`. A
   throwing notifier is swallowed and audited as `notify.failed`.
   `Notify\GenieInboxNotifier` reads `GENIE_INBOX_URL`/`_TOKEN` with `getenv()`
   at send time, never config. It audits event, ref and status only, never

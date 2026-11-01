@@ -15,6 +15,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+Additive. **Consumer action: none.** The new event fires only for a host that
+already opted into a notifier (`Council::notifyUsing()`, `Council::notifyGenie()`
+or `COUNCIL_NOTIFY_GENIE=true`). With no notifier bound, nothing changes. **The
+lab pages are untouched, so there is no re-publish.** `council:pages-check`
+stays current.
+
+### Added
+- **`awaiting_owner` owner event.** It fires after commit when a Change enters
+  `awaiting_owner`. The only way in is a non-whitelisted `propose()`: an
+  agent, or a GitHub issue author who is not on the list. Until now such a
+  proposal sat silently until someone happened to look (CC-fancy-0003 waited
+  unnoticed). A whitelisted proposal fires nothing, and a rolled-back one
+  fires nothing.
+  - `dedupeKey`: `council:{ref}:awaiting_owner`. A Change cannot re-enter
+    `awaiting_owner`, so the key needs no round discriminator.
+  - The body carries the ref, the state, `source`, `initiator`, and
+    `counts: packages=N classes=N`, plus the line "The owner must decide:
+    approve or reject this initiation in the lab." It never carries the title,
+    summary, approach, pros or cons.
+  - The initiator comes from the proposal's input, so anything that is not
+    shaped like an agent address or a GitHub login is sent as `[in the lab]`
+    (`OwnerEvent::identity()`).
+  - `level` is `info`. The Genie app-inbox contract allows only `info`,
+    `success` and `failure`; it has no warning level. A pending proposal is not
+    a failure, so the subject says "(owner decision needed)" instead.
+- `OwnerEvent::$source`, `OwnerEvent::$initiator` (set on `awaiting_owner`
+  only) and `OwnerEvent::needsOwner()`.
+
+### Changed
+- **The `escalated` notice says plainly that the owner must decide.** The
+  subject gains "(owner decision needed)", and the body gains "The owner must
+  decide: approve or reject this Change in the lab." `level` (`failure`) and
+  `dedupeKey` are unchanged, so Genie's 10-minute dedupe still matches across
+  the upgrade.
+
 ## [0.3.0] - 2026-10-31
 
 Additive: a host that does nothing is unaffected. No notifier is bound by

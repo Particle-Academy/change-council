@@ -89,7 +89,7 @@ final class GenieInboxNotifier implements OwnerEventNotifier
         if ($this->to !== null && trim($this->to) !== '') {
             $body['to'] = trim($this->to);
         }
-        $body['subject'] = 'Change Council '.$event->ref.': '.$event->label();
+        $body['subject'] = 'Change Council '.$event->ref.': '.$event->label().($event->needsOwner() ? ' (owner decision needed)' : '');
         $body['body'] = self::cap(self::text($event, $link));
         $body['level'] = match (true) {
             in_array($event->event, self::SUCCESS, true) => 'success',
@@ -104,7 +104,11 @@ final class GenieInboxNotifier implements OwnerEventNotifier
         return $body;
     }
 
-    /** Refs, states, codes and counts. Never a title, note, reason or reply. */
+    /**
+     * Refs, states, codes and counts, plus the source and initiator identity
+     * on `awaiting_owner`. Never a title, summary, approach, pros/cons, note,
+     * reason or reply.
+     */
     public static function text(OwnerEvent $event, ?string $link): string
     {
         $lines = ['Change Council '.$event->ref.': '.$event->label(), 'state: '.$event->state];
@@ -117,8 +121,19 @@ final class GenieInboxNotifier implements OwnerEventNotifier
         if ($event->code !== null) {
             $lines[] = 'reason code: '.$event->code;
         }
+        if ($event->source !== null) {
+            $lines[] = 'source: '.$event->source;
+        }
+        if ($event->initiator !== null) {
+            $lines[] = 'initiator: '.OwnerEvent::identity($event->initiator);
+        }
         if ($event->counts !== []) {
             $lines[] = 'counts: '.implode(' ', array_map(fn (string $k, int $v) => $k.'='.$v, array_keys($event->counts), $event->counts));
+        }
+        if ($event->event === OwnerEvent::AWAITING_OWNER) {
+            $lines[] = 'The owner must decide: approve or reject this initiation in the lab.';
+        } elseif ($event->event === OwnerEvent::ESCALATED) {
+            $lines[] = 'The owner must decide: approve or reject this Change in the lab.';
         }
         $lines[] = $link === null ? 'Read it in the lab.' : 'Read it in the lab: '.$link;
 

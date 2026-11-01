@@ -125,7 +125,8 @@ The ledger never calls Genie. The lab's own agent works the queue; see
 
 ## 6. Owner-event notices (optional)
 
-To tell the clerk when the owner acts, opt in. Nothing is bound by default.
+To tell the clerk when the owner acts, or when a proposal is waiting for the
+owner, opt in. Nothing is bound by default.
 
 ```php
 Council::notifyGenie();                       // or COUNCIL_NOTIFY_GENIE=true
@@ -134,18 +135,25 @@ Council::notifyGenie();                       // or COUNCIL_NOTIFY_GENIE=true
 
 The notice is sent after commit. These events are covered:
 
+- `awaiting_owner`: a non-whitelisted proposal is waiting for the owner to
+  approve or reject it
 - an initiation approved or rejected
 - an override
 - a revoke
 - a round's tally closed
-- an escalation
+- `escalated`: a round needs the owner to decide
+
+`awaiting_owner` and `escalated` say "(owner decision needed)" in the subject,
+and their body says what the owner must decide.
 
 `COUNCIL_NOTIFY_TO` picks the agent; empty means Genie's default. Genie gives a
 site it hosts `GENIE_INBOX_URL` and `GENIE_INBOX_TOKEN`. They are read with
 `getenv()` at send time, so a rotated token is picked up and `config:cache`
 cannot freeze one. Never copy them into `.env` or config.
 
-The notice holds refs, states and counts, never reply text. A failure is an
+The notice holds refs, states and counts, never reply text or proposal text.
+`awaiting_owner` adds the source and the initiator; an initiator not shaped
+like an agent address or a GitHub login is sent as `[in the lab]`. A failure is an
 audit event, never an error:
 
 - `notify.failed` with the status: a 404 means the token was rotated or
