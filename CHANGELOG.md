@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-03
+
 ### Security
 - **The detector now runs `git` and `php` by absolute path.** On Windows a bare
   name could run a same-named executable from the repository under inspection or
