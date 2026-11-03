@@ -3,6 +3,7 @@
 // tree, so a fingerprint is the same on every machine that has the same refs.
 
 import { execFileSync } from 'node:child_process';
+import { accessSync, constants, statSync } from 'node:fs';
 
 export class GitError extends Error {}
 
@@ -24,9 +25,100 @@ export function cleanGitEnv(env = process.env) {
     return out;
 }
 
-export function git(repo, args, { allowFail = false } = {}) {
+// Which file a bare program name runs must not depend on the working directory.
+// On Windows a spawn with `cwd` searches that directory ahead of PATH, and reading
+// only git objects does not help, because the executable sits in the tree. So walk
+// PATH here, absolute entries only, and spawn the absolute path it returns.
+//
+// Kept identical to `executable.ts` in fancy-git-js and `ExecutableResolver` in
+// fancy-git-php; all three read the same `executable-lookup-cases.json`. It lives
+// in this file so the detector's list of files to pin does not grow.
+
+// What CreateProcess can start without a shell.
+const RUNNABLE_EXTENSIONS = new Set(['.com', '.exe']);
+// cmd.exe re-parses a batch file's arguments, so one is never started.
+const BATCH_EXTENSIONS = new Set(['.bat', '.cmd']);
+const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
+
+export function isAbsoluteEntry(entry, platform) {
+    if (platform !== 'win32') return entry.startsWith('/');
+    // Not path.win32.isAbsolute: it accepts "\foo", which is relative to the
+    // current drive and so still depends on the working directory.
+    return /^[A-Za-z]:[\\/]/.test(entry) || /^[\\/]{2}[^\\/]+[\\/][^\\/]+/.test(entry);
+}
+
+function readEnv(env, key, platform) {
+    if (platform !== 'win32') return env[key];
+    for (const [name, value] of Object.entries(env)) {
+        if (name.toUpperCase() === key) return value;
+    }
+    return undefined;
+}
+
+function isRunnableFile(path, platform) {
     try {
-        return execFileSync('git', args, { cwd: repo, env: cleanGitEnv(), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+        if (!statSync(path).isFile()) return false;
+        if (platform !== 'win32') accessSync(path, constants.X_OK);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** { path, batch }: the file to run or null, and the first batch file seen (never returned as path). */
+export function findExecutable(name, { platform = process.platform, env = process.env, isFile = (path) => isRunnableFile(path, platform) } = {}) {
+    const windows = platform === 'win32';
+    const separator = windows ? '\\' : '/';
+
+    const hasExtension = /\.(?:com|exe|bat|cmd)$/i.test(name);
+    const extensions = !windows || hasExtension
+        ? ['']
+        : (readEnv(env, 'PATHEXT', platform) || DEFAULT_PATHEXT).split(';').filter(Boolean);
+
+    let batch = null;
+    for (const raw of (readEnv(env, 'PATH', platform) ?? '').split(windows ? ';' : ':')) {
+        const entry = windows ? raw.replace(/^"(.*)"$/, '$1') : raw;
+        if (!isAbsoluteEntry(entry, platform)) continue;
+        const directory = entry.replace(windows ? /[\\/]+$/ : /\/+$/, '');
+        for (const extension of extensions) {
+            const candidate = `${directory}${separator}${name}${extension}`;
+            if (!isFile(candidate)) continue;
+            if (!windows) return { path: candidate, batch };
+            const kind = /\.[^.\\/]*$/.exec(candidate)?.[0].toLowerCase() ?? '';
+            if (RUNNABLE_EXTENSIONS.has(kind)) return { path: candidate, batch };
+            if (BATCH_EXTENSIONS.has(kind)) batch ??= candidate;
+        }
+    }
+    return { path: null, batch };
+}
+
+const resolved = new Map();
+
+/**
+ * The absolute path to spawn for `name`, cached for the life of the process. An
+ * absolute `name` is returned as given. A failure throws and is not cached.
+ */
+export function resolveExecutable(name) {
+    if (isAbsoluteEntry(name, process.platform)) return name;
+    const cached = resolved.get(name);
+    if (cached !== undefined) return cached;
+    const { path, batch } = findExecutable(name);
+    if (path !== null) {
+        resolved.set(name, path);
+        return path;
+    }
+    if (batch !== null) {
+        throw new GitError(`Found "${batch}" on PATH, but a batch file cannot be run without a shell. Add a real ${name} executable to PATH.`);
+    }
+    throw new GitError(`Could not find the "${name}" executable. Only absolute PATH entries are searched; the current directory is never used. Add ${name} to PATH.`);
+}
+
+export function git(repo, args, { allowFail = false } = {}) {
+    // Outside the try: `allowFail` means "this git command may fail", not "git may
+    // be missing", which would otherwise read as an unknown ref.
+    const executable = resolveExecutable('git');
+    try {
+        return execFileSync(executable, args, { cwd: repo, env: cleanGitEnv(), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     } catch (error) {
         if (allowFail) {
             return null;

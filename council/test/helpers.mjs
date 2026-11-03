@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { cleanGitEnv } from '../lib/git.mjs';
+import { cleanGitEnv, resolveExecutable } from '../lib/git.mjs';
 
 export const CHECK = join(dirname(fileURLToPath(import.meta.url)), '..', 'check.mjs');
 
@@ -17,7 +17,7 @@ export function makeRepo(t) {
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     // cleanGitEnv: fixtures must be built in THIS directory even when the suite
     // runs inside a git hook that exports GIT_DIR (the release preflight does).
-    const git = (...args) => execFileSync('git', args, { cwd: dir, env: cleanGitEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const git = (...args) => execFileSync(resolveExecutable('git'), args, { cwd: dir, env: cleanGitEnv(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     git('init', '-q', '-b', 'main');
     git('config', 'user.email', 'fixture@example.com');
     git('config', 'user.name', 'Fixture');
@@ -68,7 +68,7 @@ export function pair(t, before, after, { tagMessage = null, removeAfter = [] } =
 }
 
 export function runCli(args, cwd) {
-    const result = spawnSync(process.execPath, [CHECK, ...args], { cwd, encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [CHECK, ...args], { cwd, encoding: 'utf8', windowsHide: true });
     return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 

@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { finding, matchesAny } from '../finding.mjs';
+import { resolveExecutable } from '../git.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'php', 'surface.php');
 const INTERNAL = { kind: 'internal', reason: 'marked @internal: not part of the public API' };
@@ -26,8 +27,21 @@ export function phpPaths(composerText) {
     }
 }
 
+// COUNCIL_PHP with a directory in it is the operator's explicit choice. A bare
+// name goes through the same lookup as git, so the start directory cannot supply it.
+function phpCommand() {
+    const configured = process.env.COUNCIL_PHP ?? 'php';
+    return /[\\/]/.test(configured) ? configured : resolveExecutable(configured);
+}
+
 function run(files) {
-    const result = spawnSync(process.env.COUNCIL_PHP ?? 'php', [SCRIPT], { input: JSON.stringify({ files }), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    let command;
+    try {
+        command = phpCommand();
+    } catch (error) {
+        return { error: `php not on PATH (${error.message})` };
+    }
+    const result = spawnSync(command, [SCRIPT], { input: JSON.stringify({ files }), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true });
     if (result.error) return { error: result.error.code === 'ENOENT' ? 'php not on PATH' : result.error.message };
     if (result.status !== 0) return { error: `surface.php exited ${result.status}: ${result.stderr.trim()}` };
     try {

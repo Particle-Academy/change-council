@@ -21,6 +21,11 @@ Two halves in one repo:
   except `--from-dts/--to-dts` directories. Fingerprints are
   `sha256(class|subject|before|after)`; changing a subject format changes every
   fingerprint and un-covers approved Changes, so treat subjects as wire format.
+- Never spawn a bare program name. `resolveExecutable()` in `lib/git.mjs` walks
+  PATH (absolute entries only) so the repo under inspection or the start
+  directory cannot supply `git` or `php`. Its cases are
+  `council/test/fixtures/executable-lookup-cases.json`, the same file as in
+  fancy-git-js and fancy-git-php.
 - `php/surface.php` tokenizes (never executes) PHP files given on stdin. It
   compares only CHANGED files under the composer autoload paths.
 - `lib/record.mjs` must stay byte-compatible with `src/Support/CanonicalJson.php`.

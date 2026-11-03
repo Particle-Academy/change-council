@@ -15,6 +15,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- **The detector now runs `git` and `php` by absolute path.** On Windows a bare
+  name could run a same-named executable from the repository under inspection or
+  from the start directory instead of the real program, and CI runs on Ubuntu, so
+  nothing here caught it. It now finds each one on `PATH` once per process, reading
+  only absolute entries, and never the current directory or the repository. Both
+  spawns now also set `windowsHide`.
+  - With no `git`, the report now has `ok: false` and an error saying so, instead
+    of the misleading `unknown ref`.
+  - With no `php`, the coverage note still says `php not on PATH`, as before.
+  - A `.cmd` or `.bat` on `PATH` is not run. A real executable later on `PATH` is
+    used instead. A batch file was never run here, and the message now names it.
+  - `COUNCIL_PHP` still works. A value containing a directory is used as given; a
+    bare name now goes through the same lookup.
+
+  **Consumer action: none**, unless the only `git` or `php` you have is in the
+  current directory or on a relative `PATH` entry, in which case add it to `PATH`
+  by absolute path. If you fetch the detector pinned by hash, re-pin when you take
+  this: `council/lib/git.mjs` and `council/lib/extractors/php.mjs` changed. No new
+  file was added to the list. The lab pages are untouched, so there is no
+  re-publish.
+
 ## [0.4.0] - 2026-11-01
 
 Additive. **Consumer action: none.** The new event fires only for a host that
