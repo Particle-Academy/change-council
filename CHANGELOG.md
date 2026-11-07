@@ -15,6 +15,67 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
+**Consumer action:** run `php artisan migrate` (one additive migration), then
+re-publish the pages: `php artisan vendor:publish --tag=council-pages --force`.
+Nothing else. With the defaults (every weight 1, threshold 1) every outcome is
+exactly what 0.4 would decide, so nothing changes until the owner changes a
+weight or the threshold.
+
+### Added
+- **Council members.** A members list (`{prefix}/members`, page
+  `Council/Members`) and a profile per member (`{prefix}/members/{address}`,
+  page `Council/Member`), linked from a Council nav on every page. The list is a
+  sortable table: name and address, project and workspace, weight, silence
+  policy, declared package count, votes cast, approve/conflict/abstain counts,
+  missed petitions, last vote and census. The profile shows the member's
+  project, declared and watched packages, and its voting record: every petition
+  sent to it, newest first, with change, round, verdict (or silent/undelivered),
+  lateness, reason, impact, severity and sent/replied times.
+- **Vote weights and a weighted blocking threshold** (owner ruling,
+  2026-11-07). Each member has a `weight` (integer, 0 to `council.weights.max`,
+  default 1). A round's blocking conflicts (`blocker` or `major`, as before)
+  block only when the combined weight of the members raising them reaches the
+  council's blocking threshold (`council.tally.blocking_threshold`, default 1,
+  owner-settable in the lab). A weight-0 member is advisory: its conflict is
+  recorded and shown, and never blocks. Blocking conflicts below the threshold
+  do not block: the Change is approved with notes and flagged
+  `blocking_below_threshold`. Round 2 escalation and the owner override with
+  acknowledgements work as before, on the conflicts that do block.
+- The tally records the weights it used, the blocking weight, the threshold,
+  and the conflicts below the threshold or advisory; the change page shows it
+  ("Blocking weight 2 of threshold 3"), and each petition shows the member's
+  weight. A decision record's round carries an optional `weighing` object.
+- Owner methods `Ledger::setWeight()`, `setProject()` and
+  `setBlockingThreshold()`, each validated and audited (`consumer.weight`,
+  `consumer.project` by field name only, `council.blocking_threshold`). Like
+  every owner method, they are reachable only through the API behind the
+  `owner` ability, never from a command.
+- Member project fields: `project_name`, `project_description` and
+  `project_url` (absolute `http`/`https` only; anything else is refused, and
+  the pages refuse it again before drawing a link).
+- JSON API: `GET members`, `GET members/{address}`, and the owner writes
+  `PUT members/{address}/weight`, `PUT members/{address}/project` and
+  `PUT settings/blocking-threshold`.
+- Config: `council.tally.blocking_threshold`, `council.tally.max_threshold`,
+  `council.weights.max`, `council.members.project_name_max` and
+  `council.members.project_description_max`.
+- Migration `2026_11_07_000000_add_council_members_weights_and_profiles`:
+  additive columns (`council_consumers.weight` default 1 and the three project
+  fields, `council_changes.blocking_below_threshold`) and a `council_settings`
+  table. No existing row is changed or removed.
+
+### Changed
+- API JSON now escapes `<`, `>` and `&` (`JSON_HEX_TAG`, `JSON_HEX_AMP`). The
+  decoded strings are identical; a client that compares raw bytes would see
+  `<` where it saw `<`.
+- `Ledger::openConflicts()` reads a round closed by a 0.5 tally as recorded,
+  and weighs an open round against today's weights and threshold. A round closed
+  before 0.5 keeps its old meaning: closed rounds are never re-tallied.
+- The pages changed (new `Members.tsx`, `Member.tsx` and `parts/nav.ts`; Index
+  and Show gained the nav and the weight display): re-publish them.
+
 ## [0.4.1] - 2026-11-03
 
 ### Security

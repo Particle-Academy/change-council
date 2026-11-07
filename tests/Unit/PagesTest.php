@@ -24,8 +24,39 @@ function pageSources(): array
     return $out;
 }
 
-test('both pages exist', function (): void {
-    expect(array_keys(pageSources()))->toContain('Index.tsx', 'Show.tsx');
+test('every page exists', function (): void {
+    expect(array_keys(pageSources()))->toContain('Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx', 'nav.ts');
+});
+
+test('every page draws the Council nav, with Members in it', function (): void {
+    foreach (['Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx'] as $name) {
+        expect(pageSources()[$name])->toMatch('/data-action="council-nav-changes"/', $name)
+            ->and(pageSources()[$name])->toMatch('/data-action="council-nav-members"/', $name);
+    }
+});
+
+test('the members list is a sortable Fancy table', function (): void {
+    $members = pageSources()['Members.tsx'];
+
+    expect($members)->toContain('<Table.Column')
+        ->and(preg_match_all('/<Table\.Column\b[^>]*sortKey=/', $members))->toBeGreaterThanOrEqual(8)
+        ->and($members)->toContain('data-testid="council-members"');
+});
+
+test('the profile links a project URL only when it is http or https, and the owner controls are drawn only for an owner', function (): void {
+    $member = pageSources()['Member.tsx'];
+
+    expect($member)->toMatch('/safeUrl\(/')
+        ->and(pageSources()['nav.ts'])->toContain('/^https?:\/\//i')
+        ->and($member)->toContain('data-field="member-weight"')
+        ->and($member)->toContain('data-field="member-silence-policy"')
+        ->and($member)->toContain('data-field="project-url"')
+        ->and($member)->toMatch('/canSetPolicy\s*&&/');
+});
+
+test('the change page shows the threshold arithmetic', function (): void {
+    expect(pageSources()['Show.tsx'])->toContain('Blocking weight')
+        ->and(pageSources()['Show.tsx'])->toContain('of threshold');
 });
 
 test('imports come only from Fancy packages, React, Inertia and the pages\' own parts', function (): void {

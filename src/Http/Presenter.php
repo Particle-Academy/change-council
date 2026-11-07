@@ -47,6 +47,7 @@ final class Presenter
             'approved_unopposed' => (bool) $change->approved_unopposed,
             'approved_with_notes' => (bool) $change->approved_with_notes,
             'late_conflict' => (bool) $change->late_conflict,
+            'blocking_below_threshold' => (bool) $change->blocking_below_threshold,
             'decided_by' => $change->decided_by,
             'updated_at' => $change->updated_at?->utc()->format('Y-m-d\TH:i:s\Z'),
         ];
@@ -94,6 +95,7 @@ final class Presenter
             'closed_at' => $round->closed_at?->utc()->format('Y-m-d\TH:i:s\Z'),
             'outcome' => $round->outcome,
             'tally' => $round->tally,
+            'weighing' => $this->ledger->weighing($round),
             'petitions' => Petition::query()->where('round_id', $round->id)->orderBy('id')->get()->map(fn (Petition $p) => [
                 'id' => $p->id,
                 'agent_address' => $p->agent_address,
@@ -104,6 +106,8 @@ final class Presenter
                 'outcome' => $p->outcome,
                 'catch_up' => $p->catch_up,
                 'effective_silence_policy' => $this->ledger->policyFor($change, $p->agent_address),
+                // The member's weight now; a closed round's tally keeps the weights it used.
+                'weight' => (int) (Consumer::query()->where('address', $p->agent_address)->value('weight') ?? 1),
                 'votes' => Vote::query()->where('petition_id', $p->id)->orderBy('id')->get()->map(fn (Vote $v) => self::vote($v))->all(),
             ])->all(),
         ];
@@ -134,6 +138,7 @@ final class Presenter
             'packages' => $c->packages,
             'watches' => $c->watches,
             'silence_policy' => $c->silence_policy,
+            'weight' => (int) ($c->weight ?? 1),
             'whitelisted' => $c->whitelisted,
             'internal' => $c->internal,
             'source' => $c->source,

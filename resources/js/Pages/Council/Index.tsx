@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Heading, Input, Select, StatList, Table, Text } from '@particle-academy/react-fancy';
 import { useMemo, useState } from 'react';
 import { type ConsumerRow, type HostLink, send, type Summary, usePoll } from './parts/api';
+import { navVariant } from './parts/nav';
 import { label, POLICIES, STATES, stateTone } from './parts/tone';
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
     host: HostLink;
     /** Whether the hook allows `owner` for this viewer. Display only: the API asks again. */
     canSetPolicy: boolean;
-    endpoints: { changes: string; show: string; consumers: string };
+    endpoints: { changes: string; show: string; consumers: string; index: string; members: string };
 };
 
 /**
@@ -62,11 +63,19 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
             <div className="mx-auto max-w-7xl space-y-6 p-6" data-surface="council-index">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
-                        {host && (
-                            <Button data-action="council-host" href={host.url} variant="ghost" size="sm" id="council-host">
-                                {host.label}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {host && (
+                                <Button data-action="council-host" href={host.url} variant="ghost" size="sm" id="council-host">
+                                    {host.label}
+                                </Button>
+                            )}
+                            <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('changes', 'changes')} size="sm" id="council-nav-changes">
+                                Changes
                             </Button>
-                        )}
+                            <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('changes', 'members')} size="sm" id="council-nav-members">
+                                Members
+                            </Button>
+                        </div>
                         <Heading as="h1" size="2xl" weight="semibold">
                             Change council
                         </Heading>
@@ -190,6 +199,11 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
                                                     {c.late_conflict && (
                                                         <Badge color="red" variant="outline" size="sm">
                                                             late conflict
+                                                        </Badge>
+                                                    )}
+                                                    {c.blocking_below_threshold && (
+                                                        <Badge color="orange" variant="outline" size="sm">
+                                                            below threshold
                                                         </Badge>
                                                     )}
                                                 </div>

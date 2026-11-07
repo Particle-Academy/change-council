@@ -18,6 +18,7 @@ use ChangeCouncil\Http\DenyAll;
 use ChangeCouncil\Http\Presenter;
 use ChangeCouncil\Ledger\Ledger;
 use ChangeCouncil\Ledger\Whitelist;
+use ChangeCouncil\Members\Members;
 use ChangeCouncil\Notify\NullNotifier;
 use ChangeCouncil\Notify\OwnerEventNotifier;
 use ChangeCouncil\Petitions\Ingest;
@@ -85,6 +86,11 @@ final class CouncilServiceProvider extends ServiceProvider
                 'round2_hours' => (int) $app['config']->get('council.deadlines.round2_hours', 48),
                 'extension_hours' => (int) $app['config']->get('council.deadlines.extension_hours', 24),
                 'census_max_age_days' => (int) $app['config']->get('council.census_max_age_days', 30),
+                'blocking_threshold' => (int) $app['config']->get('council.tally.blocking_threshold', 1),
+                'max_threshold' => (int) $app['config']->get('council.tally.max_threshold', 1000),
+                'max_weight' => (int) $app['config']->get('council.weights.max', 1000),
+                'project_name_max' => (int) $app['config']->get('council.members.project_name_max', 200),
+                'project_description_max' => (int) $app['config']->get('council.members.project_description_max', 5000),
             ],
             $app->make(OwnerEventNotifier::class),
         ));
@@ -96,7 +102,8 @@ final class CouncilServiceProvider extends ServiceProvider
         $this->app->bind(DecisionRecords::class, fn (Application $app) => new DecisionRecords($app->make(RecordSigner::class), $app->make(AuditLog::class)));
         $this->app->bind(Feed::class, fn (Application $app) => new Feed((string) $app['config']->get('council.origin', 'fancy')));
         $this->app->bind(Presenter::class, fn (Application $app) => new Presenter($app->make(Ledger::class)));
-        $this->app->bind(Api::class, fn (Application $app) => new Api($app->make(Ledger::class), $app->make(Presenter::class), $app->make(Feed::class), $app->make(Authorizer::class)));
+        $this->app->bind(Members::class, fn (Application $app) => new Members($app->make(Ledger::class)));
+        $this->app->bind(Api::class, fn (Application $app) => new Api($app->make(Ledger::class), $app->make(Presenter::class), $app->make(Feed::class), $app->make(Authorizer::class), $app->make(Members::class)));
         $this->app->bind(Detector::class, fn (Application $app) => new Detector(
             (string) $app['config']->get('council.detector.node', 'node'),
             $app['config']->get('council.detector.script'),

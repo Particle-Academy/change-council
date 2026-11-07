@@ -46,7 +46,19 @@ final class DecisionRecords
                 $o = $petition->outcome ?? 'silent';
                 $outcomes[$o] = ($outcomes[$o] ?? 0) + 1;
             }
-            $rounds[] = ['number' => $round->number, 'digest' => $round->approach_digest, 'outcomes' => $outcomes];
+            $row = ['number' => $round->number, 'digest' => $round->approach_digest, 'outcomes' => $outcomes];
+            // Optional (added in 0.5.0): the threshold arithmetic the tally used.
+            // Absent for a round tallied before weights existed.
+            $tally = $round->tally;
+            if (is_array($tally) && array_key_exists('threshold', $tally)) {
+                $row['weighing'] = [
+                    'blocking_weight' => (int) $tally['blocking_weight'],
+                    'threshold' => (int) $tally['threshold'],
+                    'below_threshold' => count((array) ($tally['below_threshold'] ?? [])),
+                    'advisory' => count((array) ($tally['advisory'] ?? [])),
+                ];
+            }
+            $rounds[] = $row;
         }
 
         return $this->signer->sign([

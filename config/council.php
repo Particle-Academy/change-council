@@ -44,6 +44,31 @@ return [
         'extension_hours' => 24,
     ],
 
+    /*
+    | Vote weights (owner ruling, 2026-11-07). A round's blocking conflicts
+    | (blocker or major) block only when the combined weight of the members
+    | raising them reaches `blocking_threshold`. Every member starts at weight 1
+    | and the threshold at 1, so one blocking conflict blocks, as before 0.5.
+    | A weight-0 member is advisory: recorded and shown, never blocking.
+    |
+    | The owner can change the threshold in the lab (audited); that value then
+    | wins over this one. Below the threshold, the Change is approved with notes
+    | and flagged for the owner.
+    */
+    'tally' => [
+        'blocking_threshold' => (int) env('COUNCIL_BLOCKING_THRESHOLD', 1),
+        'max_threshold' => (int) env('COUNCIL_MAX_BLOCKING_THRESHOLD', 1000),
+    ],
+    'weights' => [
+        'max' => (int) env('COUNCIL_MAX_WEIGHT', 1000),
+    ],
+
+    // Owner-set member project fields: the longest each may be.
+    'members' => [
+        'project_name_max' => 200,
+        'project_description_max' => 5000,
+    ],
+
     // A Change with no required voters is approved_unopposed only when every
     // external consumer's census is younger than this; otherwise it escalates.
     'census_max_age_days' => 30,

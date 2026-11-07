@@ -26,6 +26,14 @@ final class Routes
             $ref = '[A-Za-z0-9-]+';
             $router->get('/', [PageController::class, 'index'])->name('council.index');
             $router->get('changes/{ref}', [PageController::class, 'show'])->where('ref', $ref)->name('council.show');
+            $router->get('members', [PageController::class, 'members'])->name('council.members');
+            $router->get('members/{address}', [PageController::class, 'member'])->where('address', '[^/]+')->name('council.member');
+
+            $router->get('api/v1/members', [CouncilController::class, 'members'])->name('council.api.members');
+            $router->get('api/v1/members/{address}', [CouncilController::class, 'member'])->where('address', '[^/]+')->name('council.api.member');
+            $router->put('api/v1/members/{address}/weight', [CouncilController::class, 'memberWeight'])->where('address', '[^/]+')->name('council.api.member-weight');
+            $router->put('api/v1/members/{address}/project', [CouncilController::class, 'memberProject'])->where('address', '[^/]+')->name('council.api.member-project');
+            $router->put('api/v1/settings/blocking-threshold', [CouncilController::class, 'blockingThreshold'])->name('council.api.blocking-threshold');
 
             $router->get('api/v1/changes', [CouncilController::class, 'changes'])->name('council.api.changes');
             $router->get('api/v1/changes/{ref}', [CouncilController::class, 'change'])->where('ref', $ref)->name('council.api.change');

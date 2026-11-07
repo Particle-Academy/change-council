@@ -74,7 +74,7 @@ test('council:tally closes due rounds; council:status shows the state', function
  * any artisan command and pass any flag, so no command may reach an owner
  * method of the ledger at all.
  */
-const OWNER_METHODS = ['approveInitiation', 'rejectInitiation', 'override', 'revoke', 'setSilencePolicy', 'setChangeSilencePolicy'];
+const OWNER_METHODS = ['approveInitiation', 'rejectInitiation', 'override', 'revoke', 'setSilencePolicy', 'setChangeSilencePolicy', 'setWeight', 'setProject', 'setBlockingThreshold'];
 
 test('no artisan command calls an owner method of the ledger', function (): void {
     $files = glob(dirname(__DIR__, 2).'/src/Console/*.php') ?: [];

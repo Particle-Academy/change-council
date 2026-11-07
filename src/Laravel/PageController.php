@@ -43,6 +43,8 @@ final class PageController
                 'changes' => $this->url('api/v1/changes'),
                 'show' => $this->url('changes'),
                 'consumers' => $this->url('api/v1/consumers'),
+                'index' => $this->url(''),
+                'members' => $this->url('members'),
             ],
         ]);
     }
@@ -64,6 +66,54 @@ final class PageController
                 'owner' => $this->url('api/v1/changes/'.$ref.'/owner'),
                 'changeSilencePolicy' => $this->url('api/v1/changes/'.$ref.'/silence-policy'),
                 'consumers' => $this->url('api/v1/consumers'),
+                'members' => $this->url('members'),
+            ],
+        ]);
+    }
+
+    public function members(Request $request): Response
+    {
+        $list = $this->api->memberList($request->user());
+        if ($list->status !== 200) {
+            return self::json($list);
+        }
+
+        return $this->renderer->render($request, 'Council/Members', [
+            'members' => $list->body['members'],
+            'blocking_threshold' => $list->body['blocking_threshold'],
+            'pollMs' => $this->pollMs(),
+            'host' => $this->host(),
+            // Draws the threshold control. Display only: the PUT asks the hook again.
+            'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => null]),
+            'endpoints' => [
+                'index' => $this->url(''),
+                'members' => $this->url('members'),
+                'api' => $this->url('api/v1/members'),
+                'threshold' => $this->url('api/v1/settings/blocking-threshold'),
+                'show' => $this->url('changes'),
+            ],
+        ]);
+    }
+
+    public function member(Request $request, string $address): Response
+    {
+        $detail = $this->api->member($request->user(), $address);
+        if ($detail->status !== 200) {
+            return self::json($detail);
+        }
+
+        return $this->renderer->render($request, 'Council/Member', [
+            'detail' => $detail->body,
+            'pollMs' => $this->pollMs(),
+            'host' => $this->host(),
+            // Draws the owner controls. Display only: each PUT asks the hook again.
+            'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => $address]),
+            'endpoints' => [
+                'index' => $this->url(''),
+                'members' => $this->url('members'),
+                'detail' => $this->url('api/v1/members/'.rawurlencode($address)),
+                'consumers' => $this->url('api/v1/consumers'),
+                'show' => $this->url('changes'),
             ],
         ]);
     }

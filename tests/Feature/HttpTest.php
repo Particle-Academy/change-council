@@ -39,6 +39,13 @@ dataset('every route', [
     'change silence policy' => ['PUT', '/api/v1/changes/CC-fancy-0001/silence-policy', ['address' => 'moic@moic-suite', 'policy' => 'proceed_and_notify']],
     'index page' => ['GET', ''],
     'show page' => ['GET', '/changes/CC-fancy-0001'],
+    'list members' => ['GET', '/api/v1/members'],
+    'show member' => ['GET', '/api/v1/members/moic@moic-suite'],
+    'member weight' => ['PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => 2]],
+    'member project' => ['PUT', '/api/v1/members/moic@moic-suite/project', ['project_name' => 'MOIC']],
+    'blocking threshold' => ['PUT', '/api/v1/settings/blocking-threshold', ['threshold' => 2]],
+    'members page' => ['GET', '/members'],
+    'member page' => ['GET', '/members/moic@moic-suite'],
 ]);
 
 test('with no authorization hook, every route is refused', function (string $method, string $path, ?array $body = null): void {
@@ -209,4 +216,114 @@ test('without inertia installed, the default page renderer answers 501 instead o
 
     expect($response['status'])->toBe(501)
         ->and($response['body']['error']['code'])->toBe('inertia_missing');
+});
+
+test('GET members: every member with weight, policy, package count, vote stats and census, plus the threshold', function (): void {
+    httpApp(fn (): bool => true);
+    $change = propose();
+    vote($change, 'moic@moic-suite', 'conflict');
+    $user = User::create(['name' => 'Ada']);
+
+    $response = http('GET', '/api/v1/members', null, $user);
+    $member = $response['body']['members'][0];
+
+    expect($response['status'])->toBe(200)
+        ->and(array_keys($member))->toBe([
+            'address', 'name', 'workspace', 'project_name', 'project_description', 'project_url', 'weight', 'silence_policy',
+            'whitelisted', 'internal', 'source', 'census_at', 'reachable', 'notes', 'packages', 'watches', 'package_count', 'stats',
+        ])
+        ->and($member['address'])->toBe('moic@moic-suite')
+        ->and($member['weight'])->toBe(1)
+        ->and($member['stats'])->toMatchArray(['petitions' => 1, 'cast' => 1, 'conflict' => 1, 'pending' => 0])
+        ->and($response['body']['blocking_threshold'])->toBe(['value' => 1, 'source' => 'config']);
+});
+
+test('GET members/{address}: the profile and the voting record; an unknown member is 404', function (): void {
+    httpApp(fn (): bool => true);
+    $change = propose();
+    vote($change, 'moic@moic-suite', 'abstain');
+    $user = User::create(['name' => 'Ada']);
+
+    $body = http('GET', '/api/v1/members/moic@moic-suite', null, $user)['body'];
+
+    expect(array_keys($body))->toBe(['member', 'record', 'blocking_threshold'])
+        ->and($body['member']['address'])->toBe('moic@moic-suite')
+        ->and(array_keys($body['record'][0]))->toBe(['petition', 'change', 'round', 'tier', 'delivery', 'outcome', 'verdict', 'vote_status', 'late', 'reason', 'impact', 'severity', 'queued_at', 'sent_at', 'replied_at'])
+        ->and($body['record'][0]['change'])->toBe(['ref' => 'CC-fancy-0001', 'title' => 'prism 0.140: approvals fail closed', 'state' => 'round1_open'])
+        ->and($body['record'][0]['verdict'])->toBe('abstain')
+        ->and(http('GET', '/api/v1/members/nobody@nowhere', null, $user)['status'])->toBe(404);
+});
+
+test('owner writes over HTTP: weight, project and threshold, each validated, answered with the saved state', function (): void {
+    httpApp(fn (): bool => true);
+    $owner = User::create(['name' => 'Ada', 'email' => 'owner@example.com']);
+
+    $weight = http('PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => 4], $owner);
+    $project = http('PUT', '/api/v1/members/moic@moic-suite/project', ['project_name' => 'MOIC', 'project_description' => 'd', 'project_url' => 'https://moic.example.com'], $owner);
+    $threshold = http('PUT', '/api/v1/settings/blocking-threshold', ['threshold' => 3], $owner);
+
+    expect($weight['body']['member']['weight'])->toBe(4)
+        ->and($project['body']['member']['project_url'])->toBe('https://moic.example.com')
+        ->and($threshold['body']['blocking_threshold'])->toBe(['value' => 3, 'source' => 'owner'])
+        ->and(http('PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => -1], $owner)['body']['error']['code'])->toBe('invalid_weight')
+        ->and(http('PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => '2'], $owner)['body']['error']['code'])->toBe('invalid_weight')
+        ->and(http('PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => 2, 'extra' => 1], $owner)['status'])->toBe(422)
+        ->and(http('PUT', '/api/v1/members/moic@moic-suite/project', ['project_url' => 'javascript:alert(1)'], $owner)['body']['error']['code'])->toBe('invalid_url')
+        ->and(http('PUT', '/api/v1/members/nobody@nowhere/weight', ['weight' => 1], $owner)['status'])->toBe(404)
+        ->and(http('PUT', '/api/v1/settings/blocking-threshold', ['threshold' => 0], $owner)['body']['error']['code'])->toBe('invalid_threshold')
+        ->and(Consumer::query()->value('weight'))->toBe(4);
+});
+
+test('the owner writes ask the hook for `owner`, and a viewer is refused', function (): void {
+    httpApp(fn (mixed $user, string $ability): bool => $ability === 'view');
+    $viewer = User::create(['name' => 'Eve', 'email' => 'eve@example.com']);
+
+    expect(http('GET', '/api/v1/members', null, $viewer)['status'])->toBe(200)
+        ->and(http('PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => 9], $viewer)['status'])->toBe(403)
+        ->and(http('PUT', '/api/v1/settings/blocking-threshold', ['threshold' => 9], $viewer)['status'])->toBe(403)
+        ->and(Consumer::query()->value('weight'))->toBe(1);
+});
+
+test('the members pages render Council/Members and Council/Member with their props', function (): void {
+    httpApp(fn (): bool => true);
+    propose();
+    $user = User::create(['name' => 'Ada']);
+
+    $list = http('GET', '/members', null, $user)['body'];
+    $one = http('GET', '/members/moic@moic-suite', null, $user)['body'];
+
+    expect($list['component'])->toBe('Council/Members')
+        ->and($list['props']['members'][0]['address'])->toBe('moic@moic-suite')
+        ->and($list['props']['blocking_threshold'])->toBe(['value' => 1, 'source' => 'config'])
+        ->and($list['props']['canSetPolicy'])->toBeTrue()
+        ->and($list['props']['endpoints'])->toBe(['index' => '/council', 'members' => '/council/members', 'api' => '/council/api/v1/members', 'threshold' => '/council/api/v1/settings/blocking-threshold', 'show' => '/council/changes'])
+        ->and($one['component'])->toBe('Council/Member')
+        ->and($one['props']['detail']['member']['address'])->toBe('moic@moic-suite')
+        ->and($one['props']['detail']['record'])->toHaveCount(1)
+        ->and($one['props']['canSetPolicy'])->toBeTrue()
+        ->and($one['props']['endpoints'])->toBe(['index' => '/council', 'members' => '/council/members', 'detail' => '/council/api/v1/members/moic%40moic-suite', 'consumers' => '/council/api/v1/consumers', 'show' => '/council/changes'])
+        ->and(http('GET', '/members/nobody@nowhere', null, $user)['status'])->toBe(404);
+});
+
+test('agent-supplied text goes out as plain JSON strings, escaped for HTML', function (): void {
+    httpApp(fn (): bool => true);
+    $owner = User::create(['name' => 'Ada', 'email' => 'owner@example.com']);
+    http('PUT', '/api/v1/members/moic@moic-suite/project', ['project_name' => '<script>alert(1)</script>', 'project_description' => '<img src=x onerror=alert(1)>'], $owner);
+
+    $raw = http('GET', '/api/v1/members/moic@moic-suite', null, $owner)['raw'];
+
+    expect($raw)->not->toContain('<script>')
+        ->and($raw)->not->toContain('<img')
+        ->and(json_decode($raw, true)['member']['project_name'])->toBe('<script>alert(1)</script>');
+});
+
+test('the change detail shows the threshold arithmetic for each round and the member weight on each petition', function (): void {
+    httpApp(fn (): bool => true);
+    $change = propose();
+    $conflict = vote($change, 'moic@moic-suite', 'conflict')->vote;
+
+    $round = http('GET', '/api/v1/changes/CC-fancy-0001', null, User::create(['name' => 'Ada']))['body']['rounds'][0];
+
+    expect($round['weighing'])->toBe(['blocking_weight' => 1, 'threshold' => 1, 'blocks' => true, 'blocking' => [$conflict->id], 'below_threshold' => [], 'advisory' => [], 'live' => true])
+        ->and($round['petitions'][0]['weight'])->toBe(1);
 });

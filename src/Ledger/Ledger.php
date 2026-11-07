@@ -10,6 +10,7 @@ use ChangeCouncil\Models\Consumer;
 use ChangeCouncil\Models\Decision;
 use ChangeCouncil\Models\Petition;
 use ChangeCouncil\Models\Round;
+use ChangeCouncil\Models\Setting;
 use ChangeCouncil\Models\Vote;
 use ChangeCouncil\Notify\NullNotifier;
 use ChangeCouncil\Notify\OwnerEvent;
@@ -315,10 +316,16 @@ final class Ledger
     private function close(Change $change, Round $round, $petitions, array $votes): string
     {
         $counts = array_fill_keys(['approve', 'conflict', 'abstain', 'silent', 'unreachable', 'undelivered', 'invalid'], 0);
-        $blocking = [];
         $notes = [];
         $escalate = [];
         $catchUp = [];
+        // The weighted threshold: blocking-severity conflicts block only when
+        // the weight behind them reaches it. Those that do not, and a weight-0
+        // member's, become notes the owner is shown. Weights are read NOW, at
+        // close, and recorded in the tally, so a later change of weight never
+        // re-decides a closed round.
+        $weighing = $this->weigh($petitions, $votes);
+        $blocking = $weighing['blocking'];
         foreach ($petitions as $p) {
             $vote = $votes[$p->id];
             $outcome = $vote?->verdict ?? match (true) {
@@ -327,12 +334,8 @@ final class Ledger
                 default => 'silent',
             };
             $counts[$outcome]++;
-            if ($vote !== null && $vote->verdict === 'conflict') {
-                if (in_array($vote->worstSeverity(), self::BLOCKING, true)) {
-                    $blocking[] = $vote->id;
-                } else {
-                    $notes[] = $vote->id;
-                }
+            if ($vote !== null && $vote->verdict === 'conflict' && ! in_array($vote->worstSeverity(), self::BLOCKING, true)) {
+                $notes[] = $vote->id;
             }
             $fill = ['outcome' => $outcome];
             if ($p->tier === 'required' && in_array($outcome, self::SILENT_OUTCOMES, true)) {
@@ -346,6 +349,9 @@ final class Ledger
             }
             $p->forceFill($fill)->save();
         }
+        $unweighted = [...$weighing['below_threshold'], ...$weighing['advisory']];
+        $notes = [...$notes, ...$unweighted];
+        sort($notes);
 
         $censusStale = false;
         if ($petitions->where('tier', 'required')->isEmpty()) {
@@ -362,9 +368,19 @@ final class Ledger
             default => [States::APPROVED, $petitions->where('tier', 'required')->isEmpty() ? 'unopposed' : 'tally'],
         };
 
-        $tally = ['counts' => $counts, 'blocking' => $blocking, 'notes' => $notes, 'escalate' => $escalate, 'catch_up' => $catchUp, 'reason' => $reason];
+        $tally = [
+            'counts' => $counts, 'blocking' => $blocking, 'notes' => $notes, 'escalate' => $escalate, 'catch_up' => $catchUp, 'reason' => $reason,
+            'blocking_weight' => $weighing['blocking_weight'], 'threshold' => $weighing['threshold'], 'weights' => (object) $weighing['weights'],
+            'below_threshold' => $weighing['below_threshold'], 'advisory' => $weighing['advisory'],
+        ];
         $round->forceFill(['closed_at' => Carbon::now(), 'tally' => $tally, 'outcome' => $state])->save();
-        $this->audit->append($change->id, 'tally', 'round.closed', ['round' => $round->number, 'outcome' => $state, 'reason' => $reason, 'counts' => $counts]);
+        $this->audit->append($change->id, 'tally', 'round.closed', [
+            'round' => $round->number, 'outcome' => $state, 'reason' => $reason, 'counts' => $counts,
+            'blocking_weight' => $weighing['blocking_weight'], 'threshold' => $weighing['threshold'],
+        ]);
+        if ($unweighted !== [] && ! $change->blocking_below_threshold) {
+            $change->forceFill(['blocking_below_threshold' => true])->save();
+        }
         $from = $change->state;
 
         if ($state === States::APPROVED) {
@@ -505,6 +521,91 @@ final class Ledger
         });
     }
 
+    /**
+     * A member's vote weight: an integer from 0 to `council.weights.max`. 0 is
+     * advisory. Takes effect at the next round close; closed rounds keep the
+     * weights their tally recorded.
+     */
+    public function setWeight(string $address, mixed $weight, string $owner): Consumer
+    {
+        $max = (int) ($this->settings['max_weight'] ?? 1000);
+        if (! is_int($weight) || $weight < 0 || $weight > $max) {
+            throw new Refused('invalid_weight', "weight must be an integer from 0 to {$max}");
+        }
+
+        return $this->db->transaction(function () use ($address, $weight, $owner): Consumer {
+            $consumer = Consumer::query()->where('address', $address)->lockForUpdate()->first() ?? throw new Refused('not_found', "no consumer {$address}");
+            $before = (int) $consumer->weight;
+            $consumer->forceFill(['weight' => $weight])->save();
+            $this->audit->append(null, self::owner($owner), 'consumer.weight', ['address' => $address, 'from' => $before, 'to' => $weight]);
+
+            return $consumer->fresh();
+        });
+    }
+
+    /**
+     * A member's project: any of project_name, project_description and
+     * project_url. A blank value clears the field. The URL must be absolute
+     * http or https. The audit entry names the fields that changed, never their
+     * text.
+     *
+     * @param  array<string, mixed>  $fields
+     */
+    public function setProject(string $address, array $fields, string $owner): Consumer
+    {
+        if ($fields === [] || array_diff(array_keys($fields), Consumer::PROJECT_FIELDS) !== []) {
+            throw new Refused('invalid_request', 'fields must be among '.implode(', ', Consumer::PROJECT_FIELDS));
+        }
+        $limits = [
+            'project_name' => (int) ($this->settings['project_name_max'] ?? 200),
+            'project_description' => (int) ($this->settings['project_description_max'] ?? 5000),
+            'project_url' => 2048,
+        ];
+        $clean = [];
+        foreach ($fields as $key => $value) {
+            if ($value !== null && ! is_string($value)) {
+                throw new Refused('invalid_request', "{$key} must be a string or null");
+            }
+            $value = $value === null ? null : trim($value);
+            $value = $value === '' ? null : $value;
+            if ($value !== null && mb_strlen($value) > $limits[$key]) {
+                throw new Refused('too_long', "{$key} is longer than {$limits[$key]} characters", ['field' => $key, 'max' => $limits[$key]]);
+            }
+            if ($key === 'project_url' && $value !== null && ! Consumer::safeUrl($value)) {
+                throw new Refused('invalid_url', 'project_url must be an absolute http or https URL');
+            }
+            $clean[$key] = $value;
+        }
+
+        return $this->db->transaction(function () use ($address, $clean, $owner): Consumer {
+            $consumer = Consumer::query()->where('address', $address)->lockForUpdate()->first() ?? throw new Refused('not_found', "no consumer {$address}");
+            $changed = array_keys(array_filter($clean, fn (?string $v, string $k) => $consumer->getAttribute($k) !== $v, ARRAY_FILTER_USE_BOTH));
+            if ($changed !== []) {
+                $consumer->forceFill($clean)->save();
+                $this->audit->append(null, self::owner($owner), 'consumer.project', ['address' => $address, 'fields' => $changed]);
+            }
+
+            return $consumer->fresh();
+        });
+    }
+
+    /** The council's blocking threshold: an integer from 1 to `council.tally.max_threshold`. */
+    public function setBlockingThreshold(mixed $threshold, string $owner): int
+    {
+        $max = (int) ($this->settings['max_threshold'] ?? 1000);
+        if (! is_int($threshold) || $threshold < 1 || $threshold > $max) {
+            throw new Refused('invalid_threshold', "threshold must be an integer from 1 to {$max}");
+        }
+
+        return $this->db->transaction(function () use ($threshold, $owner): int {
+            $before = $this->blockingThreshold();
+            Setting::query()->updateOrCreate(['key' => Setting::BLOCKING_THRESHOLD], ['value' => $threshold]);
+            $this->audit->append(null, self::owner($owner), 'council.blocking_threshold', ['from' => $before, 'to' => $threshold]);
+
+            return $threshold;
+        });
+    }
+
     // ------------------------------------------------------------------ ingest hooks
 
     /** Called by Ingest for a late vote from a consumer on catch-up. */
@@ -551,16 +652,38 @@ final class Ledger
         return $actions;
     }
 
-    /** @return list<int> counted blocking conflict vote ids in the current round */
+    /**
+     * Counted conflict vote ids in the current round that BLOCK: the ones an
+     * owner must acknowledge to approve over them.
+     *
+     * - A round closed by a 0.5+ tally: exactly what that tally recorded.
+     * - An open round: weighed now, against today's weights and threshold.
+     * - Anything else (a round a pre-0.5 tally closed, or one closed by an
+     *   override or a withdrawal with no tally): every blocking-severity
+     *   conflict, the rule that round was decided under. A decided round is
+     *   never re-weighed.
+     *
+     * @return list<int>
+     */
     public function openConflicts(Change $change): array
     {
         $round = $change->currentRound();
         if ($round === null) {
             return [];
         }
+        if ($round->closed_at !== null && is_array($round->tally) && array_key_exists('threshold', $round->tally)) {
+            $ids = array_values(array_map('intval', (array) ($round->tally['blocking'] ?? [])));
+            sort($ids);
+
+            return $ids;
+        }
+        [$petitions, $votes] = $this->countedVotes($round);
+        if ($round->closed_at === null) {
+            return $this->weigh($petitions, $votes)['blocking'];
+        }
         $ids = [];
-        foreach (Petition::query()->where('round_id', $round->id)->get() as $p) {
-            $vote = $p->countedVote();
+        foreach ($petitions as $p) {
+            $vote = $votes[$p->id];
             if ($vote !== null && $vote->verdict === 'conflict' && in_array($vote->worstSeverity(), self::BLOCKING, true)) {
                 $ids[] = $vote->id;
             }
@@ -568,6 +691,111 @@ final class Ledger
         sort($ids);
 
         return $ids;
+    }
+
+    /**
+     * The threshold arithmetic for one round, for the pages: what its tally
+     * recorded, or for an open round what it would be now. Null for a round
+     * decided before weights existed.
+     *
+     * @return array{blocking_weight: int, threshold: int, blocks: bool, blocking: list<int>, below_threshold: list<int>, advisory: list<int>, live: bool}|null
+     */
+    public function weighing(Round $round): ?array
+    {
+        if (is_array($round->tally) && array_key_exists('threshold', $round->tally)) {
+            $t = $round->tally;
+
+            return [
+                'blocking_weight' => (int) $t['blocking_weight'], 'threshold' => (int) $t['threshold'], 'blocks' => ($t['blocking'] ?? []) !== [],
+                'blocking' => array_values((array) ($t['blocking'] ?? [])), 'below_threshold' => array_values((array) ($t['below_threshold'] ?? [])),
+                'advisory' => array_values((array) ($t['advisory'] ?? [])), 'live' => false,
+            ];
+        }
+        if ($round->closed_at !== null) {
+            return null;
+        }
+        [$petitions, $votes] = $this->countedVotes($round);
+        $w = $this->weigh($petitions, $votes);
+
+        return [
+            'blocking_weight' => $w['blocking_weight'], 'threshold' => $w['threshold'], 'blocks' => $w['blocks'],
+            'blocking' => $w['blocking'], 'below_threshold' => $w['below_threshold'], 'advisory' => $w['advisory'], 'live' => true,
+        ];
+    }
+
+    /** The council's blocking threshold: the owner's setting, else config. */
+    public function blockingThreshold(): int
+    {
+        return $this->threshold()['value'];
+    }
+
+    /** @return array{value: int, source: 'owner'|'config'} */
+    public function threshold(): array
+    {
+        $row = Setting::query()->find(Setting::BLOCKING_THRESHOLD);
+        if ($row !== null && is_int($row->value) && $row->value >= 1) {
+            return ['value' => $row->value, 'source' => 'owner'];
+        }
+
+        return ['value' => max(1, (int) ($this->settings['blocking_threshold'] ?? 1)), 'source' => 'config'];
+    }
+
+    /**
+     * Weighs a round's counted blocking-severity conflicts. Their members'
+     * weights are summed; they block only when the sum reaches the threshold.
+     * A weight-0 member is advisory and never adds to the sum. A petition with
+     * no consumer row counts at the default weight, 1.
+     *
+     * When weight has to mean something other than a threshold, this is the
+     * one place to change: close() and openConflicts() both read it.
+     *
+     * @param  \Illuminate\Support\Collection<int, Petition>  $petitions
+     * @param  array<int, ?Vote>  $votes
+     * @return array{blocking_weight: int, threshold: int, blocks: bool, blocking: list<int>, below_threshold: list<int>, advisory: list<int>, weights: array<string, int>}
+     */
+    private function weigh($petitions, array $votes): array
+    {
+        $threshold = $this->blockingThreshold();
+        $weightOf = Consumer::query()->whereIn('id', $petitions->pluck('consumer_id')->filter()->unique()->values()->all())->pluck('weight', 'id');
+        $candidates = [];
+        $advisory = [];
+        $weights = [];
+        $sum = 0;
+        foreach ($petitions as $p) {
+            $vote = $votes[$p->id] ?? null;
+            if ($vote === null || $vote->verdict !== 'conflict' || ! in_array($vote->worstSeverity(), self::BLOCKING, true)) {
+                continue;
+            }
+            $weight = max(0, (int) ($weightOf[$p->consumer_id] ?? 1));
+            $weights[$p->agent_address] = $weight;
+            if ($weight > 0) {
+                $candidates[] = $vote->id;
+                $sum += $weight;
+            } else {
+                $advisory[] = $vote->id;
+            }
+        }
+        sort($candidates);
+        sort($advisory);
+        $blocks = $candidates !== [] && $sum >= $threshold;
+
+        return [
+            'blocking_weight' => $sum, 'threshold' => $threshold, 'blocks' => $blocks,
+            'blocking' => $blocks ? $candidates : [], 'below_threshold' => $blocks ? [] : $candidates,
+            'advisory' => $advisory, 'weights' => $weights,
+        ];
+    }
+
+    /** @return array{0: \Illuminate\Support\Collection<int, Petition>, 1: array<int, ?Vote>} */
+    private function countedVotes(Round $round): array
+    {
+        $petitions = Petition::query()->where('round_id', $round->id)->orderBy('id')->get();
+        $votes = [];
+        foreach ($petitions as $p) {
+            $votes[$p->id] = $p->countedVote();
+        }
+
+        return [$petitions, $votes];
     }
 
     // ------------------------------------------------------------------ helpers

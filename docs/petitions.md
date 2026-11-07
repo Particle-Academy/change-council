@@ -147,8 +147,17 @@ A round closes at its deadline (72h round 1, 48h round 2), or as soon as every
 required voter has a counted vote. At the deadline, silent required voters get
 ONE 24h extension. Then:
 
-- A `blocker` or `major` conflict: round 1 goes to `awaiting_revision`; round 2
-  escalates to the owner.
+- `blocker` or `major` conflicts whose members' combined **weight** reaches the
+  council's **blocking threshold**: round 1 goes to `awaiting_revision`; round 2
+  escalates to the owner. Every member starts at weight 1 and the threshold at
+  1 (`council.tally.blocking_threshold`), so by default one blocking conflict
+  blocks. The owner sets each member's weight and the threshold in the lab;
+  both are audited. A weight-0 member is advisory: its conflict is recorded and
+  shown, and never adds weight. Blocking conflicts that do not reach the
+  threshold do not block: the Change is approved with notes and flagged
+  `blocking_below_threshold` for the owner. The tally records the weights it
+  used, the blocking weight and the threshold, so changing a weight later never
+  re-decides a closed round.
 - A required voter that is `silent`, `unreachable`, `undelivered` or `invalid`
   follows its **silence policy**: `escalate` (the default) sends the Change to the
   owner; `proceed_and_notify` lets it proceed, marks the petition `catch_up`, and
@@ -159,5 +168,6 @@ ONE 24h extension. Then:
   consumer's census is missing or older than 30 days, which escalates.
 
 The owner can approve or reject at any point (a reason is required; approving
-over open blocking conflicts requires acknowledging each one), and revoke an
+over open blocking conflicts requires acknowledging each one, meaning the ones
+that reach the threshold), and revoke an
 approval, from the authenticated lab UI only (no artisan command can). Every one of these is in the audit log as `owner:<id>`.

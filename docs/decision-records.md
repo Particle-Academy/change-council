@@ -33,6 +33,12 @@ is Phase 3.
 
 - `covers.fingerprints` are the non-waived findings in the Change's evidence;
   `covers.versions` comes from `links.versions` when set.
+- A round tallied by 0.5.0 or later also carries `weighing`:
+  `{"blocking_weight": 2, "threshold": 3, "below_threshold": 2, "advisory": 0}`,
+  the weight behind its blocking conflicts, the threshold it was measured
+  against, and how many conflicts did not block (below the threshold, or from a
+  weight-0 member). It is an optional field, absent for an older round, so v1
+  verifiers read records with and without it.
 - The record holds counts, never free text from any reply.
 - `decided_by` is `tally` or `owner:<id>`.
 

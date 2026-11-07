@@ -2,13 +2,14 @@ import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Checkbox, CodeView, Heading, Modal, Select, Table, Tabs, Text, Textarea, Timeline } from '@particle-academy/react-fancy';
 import { useState } from 'react';
 import { type Detail, type Finding, type HostLink, type PetitionRow, type Policy, type RoundRow, send, usePoll, type Vote } from './parts/api';
+import { navVariant } from './parts/nav';
 import { label, POLICIES, severityTone, stateTone, verdictTone } from './parts/tone';
 
 type Props = {
     detail: Detail;
     pollMs: number;
     host: HostLink;
-    endpoints: { index: string; detail: string; owner: string; changeSilencePolicy: string; consumers: string };
+    endpoints: { index: string; detail: string; owner: string; changeSilencePolicy: string; consumers: string; members: string };
 };
 
 type Action = 'approve_initiation' | 'reject_initiation' | 'approve' | 'reject' | 'revoke';
@@ -52,9 +53,12 @@ export default function Show({ detail: initial, pollMs, host, endpoints }: Props
                                 {host.label}
                             </Button>
                         )}
-                        <Link href={endpoints.index} className="text-sm text-zinc-500 hover:underline" id="council-back">
+                        <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('changes', 'changes')} size="sm" id="council-nav-changes">
                             All Changes
-                        </Link>
+                        </Button>
+                        <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('changes', 'members')} size="sm" id="council-nav-members">
+                            Members
+                        </Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <Heading as="h1" size="2xl" weight="semibold">
@@ -66,6 +70,11 @@ export default function Show({ detail: initial, pollMs, host, endpoints }: Props
                         {c.approved_unopposed && <Badge color="amber">approved unopposed: nobody declares this package</Badge>}
                         {c.approved_with_notes && <Badge color="slate">approved with notes</Badge>}
                         {c.late_conflict && <Badge color="red">late conflict from a catching-up consumer</Badge>}
+                        {c.blocking_below_threshold && (
+                            <Badge color="orange" data-testid="change-below-threshold">
+                                blocking conflicts below the threshold: read them
+                            </Badge>
+                        )}
                     </div>
                     <Text size="lg">{c.title}</Text>
                     <Text color="muted" size="sm">
@@ -275,6 +284,7 @@ function Overview({ detail }: { detail: Detail }) {
 
 function Round({ round }: { round: RoundRow }) {
     const counts = round.tally?.counts ?? {};
+    const w = round.weighing;
 
     return (
         <section className="space-y-3" data-round={round.number}>
@@ -297,6 +307,18 @@ function Round({ round }: { round: RoundRow }) {
                         </Badge>
                     ))}
             </div>
+            {w && (
+                <Callout color={w.blocks ? 'red' : w.below_threshold.length + w.advisory.length > 0 ? 'orange' : 'zinc'} data-testid="round-weighing">
+                    Blocking weight {w.blocking_weight} of threshold {w.threshold}
+                    {w.live ? ' (so far: this round is open)' : ''}.{' '}
+                    {w.blocks
+                        ? `${w.blocking.length} blocking conflict(s) reach it and block.`
+                        : w.below_threshold.length > 0
+                          ? `${w.below_threshold.length} blocking conflict(s) do not reach it, so they are notes, not blocks.`
+                          : 'Nothing blocks.'}
+                    {w.advisory.length > 0 ? ` ${w.advisory.length} from weight-0 (advisory) members.` : ''}
+                </Callout>
+            )}
             <div className="grid gap-4 lg:grid-cols-2">
                 {round.petitions.map((p) => (
                     <PetitionCard key={p.id} petition={p} />
@@ -317,6 +339,10 @@ function PetitionCard({ petition: p }: { petition: PetitionRow }) {
                     <Text weight="semibold">{p.agent_address}</Text>
                     <Badge color={p.tier === 'required' ? 'blue' : 'zinc'} variant="outline" size="sm">
                         {p.tier}
+                    </Badge>
+                    <Badge color={p.weight === 0 ? 'zinc' : 'violet'} variant="outline" size="sm" data-weight={p.weight}>
+                        weight {p.weight}
+                        {p.weight === 0 ? ' (advisory)' : ''}
                     </Badge>
                     <Badge color={verdictTone(latest?.verdict ?? p.outcome)} variant="soft">
                         {latest?.verdict ?? p.outcome ?? 'no answer yet'}

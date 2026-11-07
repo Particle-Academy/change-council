@@ -38,6 +38,31 @@ final class CouncilController
         return self::json($this->api->consumers($request->user()));
     }
 
+    public function members(Request $request): JsonResponse
+    {
+        return self::json($this->api->memberList($request->user()));
+    }
+
+    public function member(Request $request, string $address): JsonResponse
+    {
+        return self::json($this->api->member($request->user(), $address));
+    }
+
+    public function memberWeight(Request $request, string $address): JsonResponse
+    {
+        return $this->withBody($request, fn (?array $body) => $this->api->memberWeight($request->user(), $address, $body));
+    }
+
+    public function memberProject(Request $request, string $address): JsonResponse
+    {
+        return $this->withBody($request, fn (?array $body) => $this->api->memberProject($request->user(), $address, $body));
+    }
+
+    public function blockingThreshold(Request $request): JsonResponse
+    {
+        return $this->withBody($request, fn (?array $body) => $this->api->blockingThreshold($request->user(), $body));
+    }
+
     public function feed(Request $request): JsonResponse
     {
         $since = filter_var($request->query('since', '0'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);

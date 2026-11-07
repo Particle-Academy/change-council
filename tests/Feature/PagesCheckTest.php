@@ -38,7 +38,7 @@ function publishedCopy(): string
 test('a fresh copy is current, file by file, and the check names every shipped file', function (): void {
     $report = PublishedPages::check(publishedCopy());
 
-    expect($report)->toHaveKeys(['Index.tsx', 'Show.tsx', 'parts/api.ts', 'parts/tone.ts'])
+    expect($report)->toHaveKeys(['Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx', 'parts/api.ts', 'parts/nav.ts', 'parts/tone.ts'])
         ->and(array_unique(array_values($report)))->toBe(['current']);
 });
 
@@ -75,7 +75,7 @@ test('council:pages-check exits 0 on a current copy and 1 on a stale one, and sa
     [$absent, $absentOutput] = runCommandWithCode('council:pages-check', ['--path' => $copy.'/nope']);
 
     expect($ok)->toBe(0)
-        ->and($okOutput)->toContain('4 of 4 current')
+        ->and($okOutput)->toContain('7 of 7 current')
         ->and($stale)->toBe(1)
         ->and($staleOutput)->toContain('stale   Index.tsx')
         ->and($staleOutput)->toContain('vendor:publish --tag=council-pages --force')

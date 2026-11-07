@@ -43,6 +43,7 @@ final class Change extends Model
             'approved_unopposed' => 'boolean',
             'approved_with_notes' => 'boolean',
             'late_conflict' => 'boolean',
+            'blocking_below_threshold' => 'boolean',
             'current_round' => 'integer',
             'decided_at' => 'datetime',
         ];

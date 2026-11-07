@@ -42,13 +42,25 @@ Two halves in one repo:
   checked against the GitHub author list; a whitelisted author opens round 1
   like a whitelisted agent. Anything non-whitelisted goes to `awaiting_owner`.
 - Owner methods (`approveInitiation`, `rejectInitiation`, `override`,
-  `revoke`, `setSilencePolicy`, `setChangeSilencePolicy`) are called ONLY from
+  `revoke`, `setSilencePolicy`, `setChangeSilencePolicy`, `setWeight`,
+  `setProject`, `setBlockingThreshold`) are called ONLY from
   `Http\Api` behind the `owner` ability. Never from `src/Console`: an agent can
   run any command with any flag. `CommandsTest` scans for it.
 - `Petitions\Ingest` is the only writer of votes. Order: replay check, flags,
   strict parse (`ReplyParser`), nonce lookup, sender match, change/round/digest
   match, open-or-catch-up, then store. The tally reads only `counted` votes and
   only `verdict` and impact `severity`.
+- Weights: `Ledger::weigh()` is the ONE place a member's weight affects an
+  outcome. Blocking-severity conflicts block only when their members' summed
+  weight reaches `blockingThreshold()` (owner setting in `council_settings`,
+  else `council.tally.blocking_threshold`). `close()` records the weights and
+  arithmetic in the round's tally; `openConflicts()` reads a 0.5+ tally as
+  recorded, weighs an open round live, and treats an older closed round by the
+  pre-0.5 rule. Never re-weigh a closed round. Do not put `weight` in
+  `Consumer::$attributes`: a host migration that seeds consumers before the 0.5
+  migration would then insert a column that does not exist yet.
+- `Members\Members` is the read model for the members pages and API (stats,
+  voting record). Read-only.
 - `Petitions\DeliveryResult` reads a send result at three refusal depths;
   only an explicit `ok: true` is `sent`.
 - The ledger never calls Genie: `Transport\ClerkQueueTransport` leaves
@@ -80,7 +92,7 @@ Two halves in one repo:
 
 ## The pages
 
-`resources/js/Pages/Council/{Index,Show}.tsx` plus `parts/*.ts` (no JSX, so a
+`resources/js/Pages/Council/{Index,Show,Members,Member}.tsx` plus `parts/*.ts` (no JSX, so a
 host's `**/*.tsx` page glob skips them). Imports are limited to Fancy packages,
 React and `@inertiajs/react`; reply text renders as `Text` or a read-only
 `CodeView`, never HTML. `tests/Unit/PagesTest.php` enforces these, the slow

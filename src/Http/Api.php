@@ -8,6 +8,7 @@ use ChangeCouncil\Feed\Feed;
 use ChangeCouncil\Ledger\Ledger;
 use ChangeCouncil\Ledger\Refused;
 use ChangeCouncil\Ledger\States;
+use ChangeCouncil\Members\Members;
 use ChangeCouncil\Models\Change;
 use ChangeCouncil\Models\Consumer;
 use Closure;
@@ -23,7 +24,73 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class Api
 {
-    public function __construct(private readonly Ledger $ledger, private readonly Presenter $presenter, private readonly Feed $feed, private readonly Authorizer $authorizer) {}
+    public function __construct(private readonly Ledger $ledger, private readonly Presenter $presenter, private readonly Feed $feed, private readonly Authorizer $authorizer, private readonly ?Members $members = null) {}
+
+    private function members(): Members
+    {
+        return $this->members ?? new Members($this->ledger);
+    }
+
+    /** GET /members: every member with its counts, and the council's blocking threshold. */
+    public function memberList(mixed $principal): ApiResponse
+    {
+        return $this->allowed($principal, 'view', ['ref' => null, 'address' => null], fn () => new ApiResponse(200, [
+            'members' => $this->members()->list(),
+            'blocking_threshold' => $this->ledger->threshold(),
+        ]));
+    }
+
+    /** GET /members/{address}: the profile and the voting record, newest first. */
+    public function member(mixed $principal, string $address): ApiResponse
+    {
+        return $this->allowed($principal, 'view', ['ref' => null, 'address' => $address], function () use ($address): ApiResponse {
+            $consumer = $this->members()->find($address) ?? throw new Refused('not_found');
+
+            return new ApiResponse(200, [
+                'member' => $this->members()->profile($consumer),
+                'record' => $this->members()->record($consumer),
+                'blocking_threshold' => $this->ledger->threshold(),
+            ]);
+        });
+    }
+
+    /** PUT /members/{address}/weight {weight} */
+    public function memberWeight(mixed $principal, string $address, ?array $body): ApiResponse
+    {
+        return $this->memberAction($principal, $address, $body, ['weight'], [], fn (array $b, string $owner) => $this->ledger->setWeight($address, $b['weight'], $owner));
+    }
+
+    /** PUT /members/{address}/project {project_name?, project_description?, project_url?} */
+    public function memberProject(mixed $principal, string $address, ?array $body): ApiResponse
+    {
+        return $this->memberAction($principal, $address, $body, [], Consumer::PROJECT_FIELDS, fn (array $b, string $owner) => $this->ledger->setProject($address, $b, $owner));
+    }
+
+    /** PUT /settings/blocking-threshold {threshold} */
+    public function blockingThreshold(mixed $principal, ?array $body): ApiResponse
+    {
+        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => null], function () use ($principal, $body): ApiResponse {
+            if (! self::closed($body, ['threshold'])) {
+                return self::error(422, 'invalid_request');
+            }
+            $this->ledger->setBlockingThreshold($body['threshold'], self::identity($principal));
+
+            return new ApiResponse(200, ['blocking_threshold' => $this->ledger->threshold()]);
+        });
+    }
+
+    private function memberAction(mixed $principal, string $address, ?array $body, array $required, array $optional, Closure $action): ApiResponse
+    {
+        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => $address], function () use ($principal, $address, $body, $required, $optional, $action): ApiResponse {
+            if (! self::closed($body, $required, $optional)) {
+                return self::error(422, 'invalid_request');
+            }
+            $action($body, self::identity($principal));
+            $consumer = $this->members()->find($address) ?? throw new Refused('not_found');
+
+            return new ApiResponse(200, ['member' => $this->members()->profile($consumer)]);
+        });
+    }
 
     /** GET /changes?state=&package=&class= */
     public function changes(mixed $principal, array $query): ApiResponse

@@ -11,8 +11,24 @@ Two Inertia pages, built only from Fancy components (react-fancy: `Table`,
   policy, which an owner sets right there (a `Select` drawn only when the hook
   allows `owner`; the API asks the hook again on the write). It covers every
   consumer, including one no Change has petitioned yet.
-- **Both pages** start with a link back to the host app (`council.host_url`,
-  `council.host_label`; an empty URL hides it).
+- **`Council/Members`** (`{prefix}/members`): every council member (consumer
+  row) in a sortable `Table`: name and address, project and workspace, weight,
+  silence policy, declared package count, votes cast, approve/conflict/abstain,
+  missed petitions, last vote and census. An owner sets the council's blocking
+  threshold here (`NumberField`).
+- **`Council/Member`** (`{prefix}/members/{address}`): one member. Project (name,
+  description, URL, workspace, declared and watched packages, internal flag,
+  census, source, notes), owner controls (weight, silence policy, project
+  fields; drawn only when the hook allows `owner`, and every PUT asks again),
+  and the voting record: every petition, newest first, with change, round,
+  verdict (or silent/undelivered), lateness, reason, impact, severity, sent and
+  replied times. The project URL becomes a link only when it is absolute http
+  or https (`parts/nav.ts` `safeUrl`, after the server's own check).
+- **Every page** starts with a link back to the host app (`council.host_url`,
+  `council.host_label`; an empty URL hides it) and the Council nav (Changes,
+  Members).
+- **`Council/Show`** also shows each round's threshold arithmetic ("Blocking
+  weight 2 of threshold 3") and each petitioned member's weight.
 - **`Council/Show`**: one Change. Owner actions (approve or reject a HITL
   initiation, approve or reject by override, revoke) open a modal that requires
   a reason and, when approving over open blocking conflicts, a checkbox per

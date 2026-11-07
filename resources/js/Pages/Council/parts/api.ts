@@ -23,6 +23,8 @@ export type Summary = {
     approved_unopposed: boolean;
     approved_with_notes: boolean;
     late_conflict: boolean;
+    /** A round had blocking conflicts whose weight did not reach the threshold. */
+    blocking_below_threshold: boolean;
     decided_by: string | null;
     updated_at: string | null;
 };
@@ -54,7 +56,20 @@ export type PetitionRow = {
     outcome: string | null;
     catch_up: boolean;
     effective_silence_policy: Policy;
+    /** The member's weight now. A closed round's tally keeps the weights it used. */
+    weight: number;
     votes: Vote[];
+};
+
+/** The threshold arithmetic: recorded by the tally, or `live` for an open round. */
+export type Weighing = {
+    blocking_weight: number;
+    threshold: number;
+    blocks: boolean;
+    blocking: number[];
+    below_threshold: number[];
+    advisory: number[];
+    live: boolean;
 };
 
 export type RoundRow = {
@@ -66,7 +81,9 @@ export type RoundRow = {
     extended_until: string | null;
     closed_at: string | null;
     outcome: string | null;
-    tally: { counts?: Record<string, number>; reason?: string; escalate?: string[]; catch_up?: string[] } | null;
+    tally: { counts?: Record<string, number>; reason?: string; escalate?: string[]; catch_up?: string[]; weights?: Record<string, number> } | null;
+    /** Null for a round decided before weights existed. */
+    weighing: Weighing | null;
     petitions: PetitionRow[];
 };
 
@@ -112,12 +129,69 @@ export type ConsumerRow = {
     packages: Package[];
     watches: Package[];
     silence_policy: Policy;
+    weight: number;
     whitelisted: boolean;
     internal: boolean;
     source: string;
     census_at: string | null;
     notes: string | null;
 };
+
+export type MemberStats = {
+    petitions: number;
+    cast: number;
+    approve: number;
+    conflict: number;
+    abstain: number;
+    missed: number;
+    pending: number;
+    last_vote_at: string | null;
+};
+
+/** A council member (a consumer row). Every string here is agent-supplied: render it as text. */
+export type MemberRow = {
+    address: string;
+    name: string;
+    workspace: string | null;
+    project_name: string | null;
+    project_description: string | null;
+    /** Absolute http or https, or null. */
+    project_url: string | null;
+    weight: number;
+    silence_policy: Policy;
+    whitelisted: boolean;
+    internal: boolean;
+    source: string;
+    census_at: string | null;
+    reachable: boolean | null;
+    notes: string | null;
+    packages: (Package & { constraint?: string })[];
+    watches: Package[];
+    package_count: number;
+    stats: MemberStats;
+};
+
+export type RecordRow = {
+    petition: number;
+    change: { ref: string | null; title: string | null; state: string | null };
+    round: number;
+    tier: 'required' | 'informed';
+    delivery: string;
+    outcome: string | null;
+    verdict: string | null;
+    vote_status: string | null;
+    late: boolean;
+    reason: string | null;
+    impact: Impact[];
+    severity: string | null;
+    queued_at: string | null;
+    sent_at: string | null;
+    replied_at: string | null;
+};
+
+export type Threshold = { value: number; source: 'owner' | 'config' };
+
+export type MemberDetail = { member: MemberRow; record: RecordRow[]; blocking_threshold: Threshold };
 
 export type Answer<T> = { ok: boolean; status: number; json: T & { error?: { code: string; [key: string]: unknown } } };
 
