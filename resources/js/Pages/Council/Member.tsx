@@ -16,7 +16,8 @@ type Props = {
 
 /**
  * Council/Member: one member's project, owner controls (weight, silence policy,
- * project fields) and voting record, newest first. Every member string is
+ * project fields, removal from the council) and voting record, newest first. A
+ * removed member keeps its page and its record. Every member string is
  * agent-supplied and rendered as text; the project URL becomes a link only when
  * it is absolute http or https.
  */
@@ -61,6 +62,11 @@ export default function Member({ detail: initial, pollMs, host, canSetPolicy, en
                             </Badge>
                             {m.internal && <Badge color="zinc">internal: never petitioned</Badge>}
                             {m.whitelisted && <Badge color="green">whitelisted</Badge>}
+                            {m.removed_at && (
+                                <Badge color="red" variant="soft" data-testid="member-removed">
+                                    former member
+                                </Badge>
+                            )}
                         </div>
                         <Text color="muted" size="sm">
                             {m.address}
@@ -81,6 +87,12 @@ export default function Member({ detail: initial, pollMs, host, canSetPolicy, en
                 {message && (
                     <Callout color="blue" dismissible onDismiss={() => setMessage(null)} data-testid="council-message">
                         {message}
+                    </Callout>
+                )}
+                {m.removed_at && (
+                    <Callout color="zinc" data-testid="member-removed-note">
+                        Removed from the council on {m.removed_at}. Its voting record and audit history are kept; it gets no new petitions, and its petitions in
+                        rounds that were open then were withdrawn, so they are never counted as silent.
                     </Callout>
                 )}
                 {pollError && (
@@ -239,6 +251,11 @@ function RecordLine({ row: r, show }: { row: RecordRow; show: string }) {
                             late
                         </Badge>
                     )}
+                    {r.withdrawn && r.verdict !== 'withdrawn' && (
+                        <Badge color="zinc" variant="outline" size="sm">
+                            withdrawn
+                        </Badge>
+                    )}
                     {r.severity && (
                         <Badge color={severityTone(r.severity)} size="sm">
                             {r.severity}
@@ -281,11 +298,13 @@ function OwnerControls({
     const [description, setDescription] = useState(m.project_description ?? '');
     const [url, setUrl] = useState(m.project_url ?? '');
     const [busy, setBusy] = useState<string | null>(null);
+    const [confirming, setConfirming] = useState(false);
+    const [reason, setReason] = useState('');
     const urlError = url.trim() !== '' && safeUrl(url.trim()) === null ? 'Must be an absolute http or https URL.' : undefined;
 
-    const put = async (key: string, path: string, body: unknown, done: string) => {
+    const put = async (key: string, path: string, body: unknown, done: string, method: 'PUT' | 'POST' = 'PUT') => {
         setBusy(key);
-        const answer = await send<{ member?: MemberRow; consumer?: unknown }>('PUT', path, body);
+        const answer = await send<{ member?: MemberRow; consumer?: unknown }>(method, path, body);
         setBusy(null);
         if (!answer.ok) {
             onRefused(`Refused: ${answer.json.error?.code ?? answer.status}`);
@@ -319,6 +338,13 @@ function OwnerControls({
             { project_name: name.trim() || null, project_description: description.trim() || null, project_url: url.trim() || null },
             `Project for ${m.address} saved.`,
         );
+    };
+
+    const remove = async () => {
+        const body = reason.trim() === '' ? {} : { reason: reason.trim() };
+        if (await put('remove', `${endpoints.detail}/remove`, body, `${m.address} was removed from the council. Its record is kept.`, 'POST')) {
+            setConfirming(false);
+        }
     };
 
     return (
@@ -358,6 +384,34 @@ function OwnerControls({
                         Save project
                     </Button>
                 </div>
+                {!m.removed_at && (
+                    <div className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700" data-testid="member-remove">
+                        <Text size="sm" color="muted">
+                            Removing a member keeps its row, voting record and audit history. It gets no new petitions, leaves the census check, is not
+                            re-added by the seeder, and its petitions in open rounds are withdrawn.
+                        </Text>
+                        {!confirming ? (
+                            <Button data-action="remove-member" onClick={() => setConfirming(true)} color="red" variant="ghost" disabled={busy !== null} id="council-remove-member">
+                                Remove from council
+                            </Button>
+                        ) : (
+                            <Callout color="red" data-testid="member-remove-confirm">
+                                <div className="space-y-3">
+                                    <Text size="sm">Remove {m.address} from the council? This cannot be undone from the lab.</Text>
+                                    <Textarea data-field="remove-reason" id="council-remove-reason" label="Reason (optional, recorded in the audit log)" value={reason} onValueChange={setReason} minRows={2} />
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button data-action="confirm-remove-member" onClick={() => void remove()} color="red" loading={busy === 'remove'} disabled={busy !== null} id="council-confirm-remove">
+                                            Confirm removal
+                                        </Button>
+                                        <Button data-action="cancel-remove-member" onClick={() => setConfirming(false)} variant="ghost" disabled={busy !== null} id="council-cancel-remove">
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            </Callout>
+                        )}
+                    </div>
+                )}
             </Card.Body>
         </Card>
     );

@@ -44,6 +44,7 @@ dataset('every route', [
     'member weight' => ['PUT', '/api/v1/members/moic@moic-suite/weight', ['weight' => 2]],
     'member project' => ['PUT', '/api/v1/members/moic@moic-suite/project', ['project_name' => 'MOIC']],
     'blocking threshold' => ['PUT', '/api/v1/settings/blocking-threshold', ['threshold' => 2]],
+    'remove member' => ['POST', '/api/v1/members/moic@moic-suite/remove', []],
     'members page' => ['GET', '/members'],
     'member page' => ['GET', '/members/moic@moic-suite'],
 ]);
@@ -230,9 +231,11 @@ test('GET members: every member with weight, policy, package count, vote stats a
     expect($response['status'])->toBe(200)
         ->and(array_keys($member))->toBe([
             'address', 'name', 'workspace', 'project_name', 'project_description', 'project_url', 'weight', 'silence_policy',
-            'whitelisted', 'internal', 'source', 'census_at', 'reachable', 'notes', 'packages', 'watches', 'package_count', 'stats',
+            'whitelisted', 'internal', 'source', 'census_at', 'reachable', 'notes', 'packages', 'watches', 'package_count', 'stats', 'removed_at',
         ])
         ->and($member['address'])->toBe('moic@moic-suite')
+        ->and($member['removed_at'])->toBeNull()
+        ->and($response['body']['former_members'])->toBe([])
         ->and($member['weight'])->toBe(1)
         ->and($member['stats'])->toMatchArray(['petitions' => 1, 'cast' => 1, 'conflict' => 1, 'pending' => 0])
         ->and($response['body']['blocking_threshold'])->toBe(['value' => 1, 'source' => 'config']);
@@ -248,7 +251,7 @@ test('GET members/{address}: the profile and the voting record; an unknown membe
 
     expect(array_keys($body))->toBe(['member', 'record', 'blocking_threshold'])
         ->and($body['member']['address'])->toBe('moic@moic-suite')
-        ->and(array_keys($body['record'][0]))->toBe(['petition', 'change', 'round', 'tier', 'delivery', 'outcome', 'verdict', 'vote_status', 'late', 'reason', 'impact', 'severity', 'queued_at', 'sent_at', 'replied_at'])
+        ->and(array_keys($body['record'][0]))->toBe(['petition', 'change', 'round', 'tier', 'delivery', 'outcome', 'verdict', 'vote_status', 'late', 'reason', 'impact', 'severity', 'queued_at', 'sent_at', 'replied_at', 'withdrawn'])
         ->and($body['record'][0]['change'])->toBe(['ref' => 'CC-fancy-0001', 'title' => 'prism 0.140: approvals fail closed', 'state' => 'round1_open'])
         ->and($body['record'][0]['verdict'])->toBe('abstain')
         ->and(http('GET', '/api/v1/members/nobody@nowhere', null, $user)['status'])->toBe(404);

@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $delivery
  * @property ?string $outcome
  * @property bool $catch_up
+ * @property ?\Illuminate\Support\Carbon $withdrawn_at its member was removed while the round was open
  */
 final class Petition extends Model
 {
@@ -32,6 +33,7 @@ final class Petition extends Model
             'queued_at' => 'datetime',
             'sent_at' => 'datetime',
             'reminded_at' => 'datetime',
+            'withdrawn_at' => 'datetime',
         ];
     }
 

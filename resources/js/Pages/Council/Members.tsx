@@ -8,6 +8,8 @@ import { label } from './parts/tone';
 type Props = {
     members: MemberRow[];
     blocking_threshold: Threshold;
+    /** Members the owner removed: kept with their record, never petitioned. */
+    former_members?: MemberRow[];
     pollMs: number;
     host: HostLink;
     /** Whether the hook allows `owner` for this viewer. Display only: the API asks again. */
@@ -34,11 +36,17 @@ const SORTERS: Record<Key, (m: MemberRow) => string | number | null> = {
 
 /**
  * Council/Members: every council member (consumer row) with its weight, silence
- * policy, declared packages and voting counts, sortable, polled slowly. Built
- * only from Fancy components; every member string is rendered as text.
+ * policy, declared packages and voting counts, sortable, polled slowly. Members
+ * the owner removed are listed apart, under Former members. Built only from
+ * Fancy components; every member string is rendered as text.
  */
-export default function Members({ members: initial, blocking_threshold, pollMs, host, canSetPolicy, endpoints }: Props) {
-    const [data, setData, pollError] = usePoll<{ members: MemberRow[]; blocking_threshold: Threshold }>(endpoints.api, { members: initial, blocking_threshold }, pollMs);
+export default function Members({ members: initial, blocking_threshold, former_members = [], pollMs, host, canSetPolicy, endpoints }: Props) {
+    const [data, setData, pollError] = usePoll<{ members: MemberRow[]; blocking_threshold: Threshold; former_members?: MemberRow[] }>(
+        endpoints.api,
+        { members: initial, blocking_threshold, former_members },
+        pollMs,
+    );
+    const former = data.former_members ?? [];
     // Starts unsorted, like the Table's own state, so its arrow and this order agree.
     const [sort, setSort] = useState<Sort<Key>>({ key: null, dir: 'asc' });
     const [threshold, setThreshold] = useState<number | null>(blocking_threshold.value);
@@ -224,6 +232,52 @@ export default function Members({ members: initial, blocking_threshold, pollMs, 
                         )}
                     </Card.Body>
                 </Card>
+
+                {former.length > 0 && (
+                    <Card>
+                        <Card.Body className="space-y-3">
+                            <Heading as="h2" size="lg" weight="semibold">
+                                Former members
+                            </Heading>
+                            <Text color="muted" size="sm">
+                                Removed from the council by the owner. Their voting record is kept; they get no new petitions.
+                            </Text>
+                            <Table className="overflow-x-auto" data-testid="council-former-members">
+                                <Table.Head>
+                                    <Table.Row>
+                                        <Table.Cell header>Member</Table.Cell>
+                                        <Table.Cell header>Removed</Table.Cell>
+                                        <Table.Cell header>Votes</Table.Cell>
+                                        <Table.Cell header>Withdrawn</Table.Cell>
+                                        <Table.Cell header>Last vote</Table.Cell>
+                                    </Table.Row>
+                                </Table.Head>
+                                <Table.Body>
+                                    {former.map((m) => (
+                                        <Table.Row key={m.address} data-member={m.address} data-removed={m.removed_at ?? ''}>
+                                            <Table.Cell>
+                                                <Link
+                                                    href={`${endpoints.members}/${encodeURIComponent(m.address)}`}
+                                                    className="font-medium text-zinc-700 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
+                                                    id={`council-former-member-${m.address}`}
+                                                >
+                                                    {m.name}
+                                                </Link>
+                                                <div className="text-xs text-zinc-500">{m.address}</div>
+                                            </Table.Cell>
+                                            <Table.Cell className="text-xs whitespace-nowrap text-zinc-500">{m.removed_at ?? '-'}</Table.Cell>
+                                            <Table.Cell className="text-sm whitespace-nowrap">
+                                                {m.stats.cast} of {m.stats.petitions}
+                                            </Table.Cell>
+                                            <Table.Cell className="text-sm">{m.stats.withdrawn}</Table.Cell>
+                                            <Table.Cell className="text-xs whitespace-nowrap text-zinc-500">{m.stats.last_vote_at ?? 'never'}</Table.Cell>
+                                        </Table.Row>
+                                    ))}
+                                </Table.Body>
+                            </Table>
+                        </Card.Body>
+                    </Card>
+                )}
             </div>
         </>
     );

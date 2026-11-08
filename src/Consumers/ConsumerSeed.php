@@ -14,7 +14,11 @@ use ChangeCouncil\Models\Consumer;
  *
  * Every row defaults to `silence_policy: escalate`. Re-seeding adds missing
  * rows and missing packages; it never touches an owner-set silence policy, a
- * whitelist flag or a census.
+ * whitelist flag or a census, and it never touches a member the owner removed
+ * (`Ledger::removeMember()`): a removed row stays removed.
+ *
+ * tribeshare@tribetrip was removed from the council by the owner on 2026-11-08,
+ * so it is no longer seeded on a fresh install either.
  */
 final class ConsumerSeed
 {
@@ -68,10 +72,10 @@ final class ConsumerSeed
                 'notes' => 'Uses react-fancy useFancyForm. Reachable as of 2026-10-27.',
             ],
             [
-                'address' => 'tribeshare@tribetrip',
-                'source' => 'inferred',
-                'packages' => [$n('react-fancy'), $c('fine-print')],
-                'notes' => 'Owner limits work FOR it; still informed of breaking changes.',
+                'address' => 'b-mo-fluid@ps-mapper',
+                'source' => 'declared',
+                'packages' => [$n('react-fancy'), $n('fancy-compliance-ui'), $c('fancy-compliance'), $n('agent-integrations')],
+                'notes' => 'PS Mapper (Bridge). Added by the owner on 2026-11-08: the only consumer of fancy-compliance-ui.',
             ],
             // Ours: derived from lockfiles, covered by the dogfood rule, never petitioned.
             ['address' => 'px-ui-sandbox', 'source' => 'lockfile', 'internal' => true, 'packages' => [], 'notes' => 'The showcase; dogfoods every release.'],
@@ -101,6 +105,11 @@ final class ConsumerSeed
                 ]);
                 $created++;
 
+                continue;
+            }
+            if ($existing->getAttribute('removed_at') !== null) {
+                // The owner removed it: re-seeding never brings a member back,
+                // or changes what a former member declared.
                 continue;
             }
             $packages = $existing->packages;

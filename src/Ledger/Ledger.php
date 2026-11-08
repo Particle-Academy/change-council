@@ -189,11 +189,11 @@ final class Ledger
         return $round;
     }
 
-    /** @return list<array{0: Consumer, 1: string, 2: string}> required + informed, never internal */
+    /** @return list<array{0: Consumer, 1: string, 2: string}> required + informed, never internal, never removed */
     private function voters(Change $change): array
     {
         $out = [];
-        foreach (Consumer::query()->where('internal', false)->orderBy('address')->get() as $consumer) {
+        foreach (Consumer::query()->where('internal', false)->whereNull('removed_at')->orderBy('address')->get() as $consumer) {
             $required = null;
             $watched = null;
             foreach ($change->packages as $p) {
@@ -283,7 +283,9 @@ final class Ledger
                 return 'not_open';
             }
             $round = $change->currentRound();
-            $petitions = Petition::query()->where('round_id', $round->id)->get();
+            // A withdrawn petition (its member was removed) is neither a vote
+            // nor a silence: the round neither waits for it nor counts it.
+            $petitions = Petition::query()->where('round_id', $round->id)->whereNull('withdrawn_at')->get();
             $votes = [];
             foreach ($petitions as $p) {
                 $votes[$p->id] = $p->countedVote();
@@ -356,7 +358,7 @@ final class Ledger
         $censusStale = false;
         if ($petitions->where('tier', 'required')->isEmpty()) {
             $maxAge = Carbon::now()->subDays($this->settings['census_max_age_days']);
-            $censusStale = Consumer::query()->where('internal', false)
+            $censusStale = Consumer::query()->where('internal', false)->whereNull('removed_at')
                 ->where(fn ($q) => $q->whereNull('census_at')->orWhere('census_at', '<', $maxAge))->exists();
         }
 
@@ -606,6 +608,55 @@ final class Ledger
         });
     }
 
+    /**
+     * Removes a member from the council. The row is kept (marked `removed_at`),
+     * so its voting record and audit history stay readable; it is never
+     * deleted. From now on it gets no petitions, leaves the census check and is
+     * not re-added by the seeder.
+     *
+     * Its petitions in rounds that are still OPEN are withdrawn: each is marked
+     * `withdrawn_at` and audited as `petition.withdrawn`, and the tally skips
+     * it, so it is never silent, never counted and cannot escalate the Change.
+     * Petitions in closed rounds are history and stay exactly as tallied.
+     */
+    public function removeMember(string $address, string $owner, ?string $reason = null): Consumer
+    {
+        $reason = $reason === null ? null : trim($reason);
+        $reason = $reason === '' ? null : $reason;
+        if ($reason !== null && mb_strlen($reason) > 1000) {
+            throw new Refused('too_long', 'reason is longer than 1000 characters', ['field' => 'reason', 'max' => 1000]);
+        }
+
+        return $this->db->transaction(function () use ($address, $owner, $reason): Consumer {
+            $consumer = Consumer::query()->where('address', $address)->lockForUpdate()->first() ?? throw new Refused('not_found', "no consumer {$address}");
+            if ($consumer->removed_at !== null) {
+                throw new Refused('invalid_state', "{$address} was already removed");
+            }
+            $now = Carbon::now();
+            $consumer->forceFill(['removed_at' => $now])->save();
+
+            $withdrawn = [];
+            $open = Petition::query()->where('agent_address', $address)->whereNull('withdrawn_at')->orderBy('id')->get();
+            foreach ($open as $petition) {
+                $change = Change::query()->lockForUpdate()->find($petition->change_id);
+                $round = Round::query()->find($petition->round_id);
+                if ($change === null || $round === null || $round->closed_at !== null
+                    || ! in_array($change->state, States::OPEN_ROUND, true) || $change->current_round !== $round->number) {
+                    continue;
+                }
+                $petition->forceFill(['withdrawn_at' => $now, 'outcome' => 'withdrawn'])->save();
+                $this->audit->append($change->id, self::owner($owner), 'petition.withdrawn', [
+                    'petition' => $petition->id, 'to' => $address, 'round' => $round->number, 'tier' => $petition->tier,
+                    'because' => 'member_removed', 'counted' => false,
+                ]);
+                $withdrawn[] = $petition->id;
+            }
+            $this->audit->append(null, self::owner($owner), 'consumer.removed', ['address' => $address, 'withdrawn' => $withdrawn, 'reason' => $reason]);
+
+            return $consumer->fresh();
+        });
+    }
+
     // ------------------------------------------------------------------ ingest hooks
 
     /** Called by Ingest for a late vote from a consumer on catch-up. */
@@ -789,7 +840,7 @@ final class Ledger
     /** @return array{0: \Illuminate\Support\Collection<int, Petition>, 1: array<int, ?Vote>} */
     private function countedVotes(Round $round): array
     {
-        $petitions = Petition::query()->where('round_id', $round->id)->orderBy('id')->get();
+        $petitions = Petition::query()->where('round_id', $round->id)->whereNull('withdrawn_at')->orderBy('id')->get();
         $votes = [];
         foreach ($petitions as $p) {
             $votes[$p->id] = $p->countedVote();

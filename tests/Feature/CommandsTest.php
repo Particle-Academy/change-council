@@ -74,7 +74,7 @@ test('council:tally closes due rounds; council:status shows the state', function
  * any artisan command and pass any flag, so no command may reach an owner
  * method of the ledger at all.
  */
-const OWNER_METHODS = ['approveInitiation', 'rejectInitiation', 'override', 'revoke', 'setSilencePolicy', 'setChangeSilencePolicy', 'setWeight', 'setProject', 'setBlockingThreshold'];
+const OWNER_METHODS = ['approveInitiation', 'rejectInitiation', 'override', 'revoke', 'setSilencePolicy', 'setChangeSilencePolicy', 'setWeight', 'setProject', 'setBlockingThreshold', 'removeMember'];
 
 test('no artisan command calls an owner method of the ledger', function (): void {
     $files = glob(dirname(__DIR__, 2).'/src/Console/*.php') ?: [];
@@ -176,7 +176,8 @@ test('council:seed-consumers seeds the known consumers, escalate by default, MOI
         ->and(collect($moic->packages)->firstWhere('name', 'particle-academy/prism')['constraint'])->toBe('0.131.0')
         ->and(array_column($moic->watches, 'name'))->toContain('particle-academy/prism-memory')
         ->and(Consumer::query()->pluck('silence_policy')->unique()->values()->all())->toBe(['escalate'])
-        ->and(Consumer::query()->pluck('address')->all())->toContain('tynn@tynn', 'miapa@maipa', 'weaver@weaver', 'guardcard@guardcard-net', 'tribeshare@tribetrip')
+        ->and(Consumer::query()->pluck('address')->all())->toContain('tynn@tynn', 'miapa@maipa', 'weaver@weaver', 'guardcard@guardcard-net', 'b-mo-fluid@ps-mapper')
+        ->and(Consumer::query()->pluck('address')->all())->not->toContain('tribeshare@tribetrip')
         ->and(Consumer::query()->where('internal', true)->pluck('address')->all())->toContain('px-ui-sandbox', 'fancy-starter-kit', 'fancy-labs');
 });
 
@@ -191,4 +192,26 @@ test('re-seeding is idempotent and never overwrites an owner-set silence policy'
     expect(Consumer::query()->count())->toBe($count)
         ->and(Consumer::query()->where('address', 'tynn@tynn')->value('silence_policy'))->toBe('proceed_and_notify')
         ->and(count(ConsumerSeed::rows()))->toBe($count);
+});
+
+test('council:seed-consumers adds PS Mapper (b-mo) as a declared member of the four packages it uses', function (): void {
+    Consumer::query()->delete();
+
+    runCommand('council:seed-consumers');
+
+    $bmo = Consumer::query()->where('address', 'b-mo-fluid@ps-mapper')->first();
+    expect($bmo)->not->toBeNull()
+        ->and($bmo->source)->toBe('declared')
+        ->and($bmo->internal)->toBeFalse()
+        ->and($bmo->silence_policy)->toBe('escalate')
+        ->and(array_map(fn (array $p) => $p['ecosystem'].':'.$p['name'], $bmo->packages))->toBe([
+            'npm:@particle-academy/react-fancy',
+            'npm:@particle-academy/fancy-compliance-ui',
+            'composer:particle-academy/fancy-compliance',
+            'npm:@particle-academy/agent-integrations',
+        ]);
+
+    // A Change to fancy-compliance-ui petitions b-mo as a required voter.
+    $change = propose(['packages' => [['ecosystem' => 'npm', 'name' => '@particle-academy/fancy-compliance-ui']]]);
+    expect(petitionFor($change, 'b-mo-fluid@ps-mapper')->tier)->toBe('required');
 });

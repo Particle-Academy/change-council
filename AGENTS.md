@@ -43,13 +43,20 @@ Two halves in one repo:
   like a whitelisted agent. Anything non-whitelisted goes to `awaiting_owner`.
 - Owner methods (`approveInitiation`, `rejectInitiation`, `override`,
   `revoke`, `setSilencePolicy`, `setChangeSilencePolicy`, `setWeight`,
-  `setProject`, `setBlockingThreshold`) are called ONLY from
+  `setProject`, `setBlockingThreshold`, `removeMember`) are called ONLY from
   `Http\Api` behind the `owner` ability. Never from `src/Console`: an agent can
   run any command with any flag. `CommandsTest` scans for it.
 - `Petitions\Ingest` is the only writer of votes. Order: replay check, flags,
   strict parse (`ReplyParser`), nonce lookup, sender match, change/round/digest
-  match, open-or-catch-up, then store. The tally reads only `counted` votes and
-  only `verdict` and impact `severity`.
+  match, withdrawn check, open-or-catch-up, then store. The tally reads only
+  `counted` votes and only `verdict` and impact `severity`.
+- Removal (`Ledger::removeMember()`, 0.5.1): a consumer row is never deleted.
+  `removed_at` takes it out of `voters()`, the census check, the whitelist,
+  `Members::list()` (it appears in `former()`) and the seeder. Its petitions in
+  OPEN rounds get `withdrawn_at` (and outcome `withdrawn`), audited as
+  `petition.withdrawn`; every tally read (`tallyChange`, `countedVotes`, the
+  summary counts, the clerk's queue) skips a withdrawn petition, and Ingest
+  refuses a reply to one as `invalid`/`petition_withdrawn`.
 - Weights: `Ledger::weigh()` is the ONE place a member's weight affects an
   outcome. Blocking-severity conflicts block only when their members' summed
   weight reaches `blockingThreshold()` (owner setting in `council_settings`,

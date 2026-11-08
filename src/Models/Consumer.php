@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?string $project_name
  * @property ?string $project_description
  * @property ?string $project_url http or https only
+ * @property ?\Illuminate\Support\Carbon $removed_at the owner removed this member; the row is kept
  */
 final class Consumer extends Model
 {
@@ -37,7 +38,8 @@ final class Consumer extends Model
         'silence_policy' => 'escalate',
         // No `weight` here: the column's own default (1) supplies it. Naming it
         // would put it in every insert, and a host migration that seeds
-        // consumers before the 0.5 migration has run would then fail.
+        // consumers before the 0.5 migration has run would then fail. The same
+        // holds for `removed_at` (0.5.1).
     ];
 
     /** A URL that may be drawn as a link: absolute http or https with a host, no whitespace. */
@@ -59,6 +61,7 @@ final class Consumer extends Model
             'internal' => 'boolean',
             'reachable' => 'boolean',
             'census_at' => 'datetime',
+            'removed_at' => 'datetime',
         ];
     }
 

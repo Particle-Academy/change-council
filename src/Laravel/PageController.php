@@ -81,6 +81,7 @@ final class PageController
         return $this->renderer->render($request, 'Council/Members', [
             'members' => $list->body['members'],
             'blocking_threshold' => $list->body['blocking_threshold'],
+            'former_members' => $list->body['former_members'],
             'pollMs' => $this->pollMs(),
             'host' => $this->host(),
             // Draws the threshold control. Display only: the PUT asks the hook again.

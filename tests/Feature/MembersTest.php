@@ -105,7 +105,7 @@ test('the list counts each member\'s votes, verdicts, missed petitions and last 
         ->and($moic['package_count'])->toBe(2)
         ->and($moic['stats'])->toBe([
             'petitions' => 3, 'cast' => 2, 'approve' => 1, 'conflict' => 1, 'abstain' => 0,
-            'missed' => 1, 'pending' => 0, 'last_vote_at' => '2026-10-28T09:00:00Z',
+            'missed' => 1, 'pending' => 0, 'withdrawn' => 0, 'last_vote_at' => '2026-10-28T09:00:00Z',
         ])
         ->and($rows['weaver@weaver']['stats'])->toMatchArray(['petitions' => 3, 'cast' => 3, 'approve' => 2, 'abstain' => 1, 'missed' => 0, 'last_vote_at' => '2026-10-29T10:00:00Z'])
         ->and($rows['genie@genie']['stats'])->toMatchArray(['petitions' => 0, 'cast' => 0, 'last_vote_at' => null])

@@ -15,6 +15,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
+**Consumer action:** run `php artisan migrate` (one additive migration), then
+re-publish the pages: `php artisan vendor:publish --tag=council-pages --force`.
+Nothing else changes until the owner removes a member.
+
+### Added
+- **Remove a member from the council** (owner, 2026-11-08). Owner method
+  `Ledger::removeMember(address, owner, reason?)`, reachable only through the
+  API behind the `owner` ability (`POST members/{address}/remove {reason?}`),
+  never from a command, and a **Remove from council** control on the member
+  profile, staged behind a confirmation. The row is never deleted: it is marked
+  `removed_at`, so its voting record and audit history stay readable. A removed
+  member:
+  - gets no petitions on any later round, and is no longer whitelisted;
+  - leaves the census check (a removed member with no census no longer holds a
+    Change in `census_stale`);
+  - leaves the members list; the API's `GET members` lists it under
+    `former_members`, and the members page under **Former members**;
+  - is never re-added, or changed, by `council:seed-consumers`.
+- Its petitions in rounds that are still open are **withdrawn**: each gets
+  `withdrawn_at` and outcome `withdrawn`, and is audited as `petition.withdrawn`
+  (`counted: false`) beside one `consumer.removed` event listing them. The tally
+  skips a withdrawn petition: it is never a silent required voter, never
+  extends or escalates a round, and its vote no longer counts toward a blocking
+  conflict. A reply to it afterwards is stored as `invalid` with problem
+  `petition_withdrawn`. The clerk's `council:petitions` queue skips it. Petitions
+  in closed rounds are history and stay exactly as tallied.
+- **PS Mapper** (`b-mo-fluid@ps-mapper`) is seeded as a declared member of
+  `react-fancy`, `fancy-compliance-ui`, `particle-academy/fancy-compliance` and
+  `agent-integrations` (owner, 2026-11-08; the only consumer of
+  `fancy-compliance-ui`).
+- Wire fields, all additive: a member's `removed_at` and `stats.withdrawn`; a
+  record row's `withdrawn`; a petition's `withdrawn_at`; a consumer's
+  `removed_at`.
+- Migration `2026_11_08_000000_add_council_removed_and_withdrawn`: nullable
+  `council_consumers.removed_at` and `council_petitions.withdrawn_at`. No
+  existing row is changed.
+
+### Removed
+- `tribeshare@tribetrip` is no longer in the consumer seed (removed from the
+  council by the owner, 2026-11-08). Re-seeding never deletes, so an existing
+  install keeps the row until the owner removes it in the lab.
+
+### Changed
+- A change summary's petition counts (`total`, `answered`, `conflicts`,
+  `queued`) leave out withdrawn petitions.
+- The pages changed (`Members.tsx`, `Member.tsx`, `Show.tsx`, `parts/api.ts`):
+  re-publish them.
+
 ## [0.5.0] - 2026-11-07
 
 **Consumer action:** run `php artisan migrate` (one additive migration), then

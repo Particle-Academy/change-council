@@ -33,6 +33,7 @@ final class Routes
             $router->get('api/v1/members/{address}', [CouncilController::class, 'member'])->where('address', '[^/]+')->name('council.api.member');
             $router->put('api/v1/members/{address}/weight', [CouncilController::class, 'memberWeight'])->where('address', '[^/]+')->name('council.api.member-weight');
             $router->put('api/v1/members/{address}/project', [CouncilController::class, 'memberProject'])->where('address', '[^/]+')->name('council.api.member-project');
+            $router->post('api/v1/members/{address}/remove', [CouncilController::class, 'removeMember'])->where('address', '[^/]+')->name('council.api.member-remove');
             $router->put('api/v1/settings/blocking-threshold', [CouncilController::class, 'blockingThreshold'])->name('council.api.blocking-threshold');
 
             $router->get('api/v1/changes', [CouncilController::class, 'changes'])->name('council.api.changes');

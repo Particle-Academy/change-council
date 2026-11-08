@@ -55,6 +55,8 @@ export type PetitionRow = {
     delivery_detail: string | null;
     outcome: string | null;
     catch_up: boolean;
+    /** Set when the member was removed while this round was open: neither a vote nor a silence. */
+    withdrawn_at: string | null;
     effective_silence_policy: Policy;
     /** The member's weight now. A closed round's tally keeps the weights it used. */
     weight: number;
@@ -135,6 +137,7 @@ export type ConsumerRow = {
     source: string;
     census_at: string | null;
     notes: string | null;
+    removed_at: string | null;
 };
 
 export type MemberStats = {
@@ -145,6 +148,8 @@ export type MemberStats = {
     abstain: number;
     missed: number;
     pending: number;
+    /** Open petitions withdrawn when the member was removed. */
+    withdrawn: number;
     last_vote_at: string | null;
 };
 
@@ -169,6 +174,8 @@ export type MemberRow = {
     watches: Package[];
     package_count: number;
     stats: MemberStats;
+    /** When the owner removed this member from the council; null for a current member. */
+    removed_at: string | null;
 };
 
 export type RecordRow = {
@@ -187,6 +194,7 @@ export type RecordRow = {
     queued_at: string | null;
     sent_at: string | null;
     replied_at: string | null;
+    withdrawn: boolean;
 };
 
 export type Threshold = { value: number; source: 'owner' | 'config' };

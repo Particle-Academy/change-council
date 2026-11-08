@@ -31,13 +31,28 @@ final class Api
         return $this->members ?? new Members($this->ledger);
     }
 
-    /** GET /members: every member with its counts, and the council's blocking threshold. */
+    /** GET /members: every current member with its counts, former (removed) members apart, and the council's blocking threshold. */
     public function memberList(mixed $principal): ApiResponse
     {
         return $this->allowed($principal, 'view', ['ref' => null, 'address' => null], fn () => new ApiResponse(200, [
             'members' => $this->members()->list(),
             'blocking_threshold' => $this->ledger->threshold(),
+            'former_members' => $this->members()->former(),
         ]));
+    }
+
+    /**
+     * POST /members/{address}/remove {reason?}: the owner removes a member from
+     * the council. The row and its history are kept; its open petitions are
+     * withdrawn. See {@see Ledger::removeMember()}.
+     */
+    public function removeMember(mixed $principal, string $address, ?array $body): ApiResponse
+    {
+        if (is_array($body) && array_key_exists('reason', $body) && $body['reason'] !== null && ! is_string($body['reason'])) {
+            $body = null;
+        }
+
+        return $this->memberAction($principal, $address, $body, [], ['reason'], fn (array $b, string $owner) => $this->ledger->removeMember($address, $owner, $b['reason'] ?? null));
     }
 
     /** GET /members/{address}: the profile and the voting record, newest first. */

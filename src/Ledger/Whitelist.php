@@ -23,7 +23,7 @@ final class Whitelist
     public function agent(string $address): bool
     {
         return in_array($address, $this->agents, true)
-            || Consumer::query()->where('address', $address)->where('whitelisted', true)->exists();
+            || Consumer::query()->where('address', $address)->where('whitelisted', true)->whereNull('removed_at')->exists();
     }
 
     public function githubAuthor(string $login): bool

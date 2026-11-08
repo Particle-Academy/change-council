@@ -74,6 +74,10 @@ final class Ingest
             if ($problem !== null) {
                 return $this->store($messageId, $from, $text, $flags, $at, $petition, 'invalid', $problem);
             }
+            if ($petition->withdrawn_at !== null) {
+                // Its member was removed from the council: kept as data, never counted.
+                return $this->store($messageId, $from, $text, $flags, $at, $petition, 'invalid', 'petition_withdrawn');
+            }
 
             $open = in_array($change->state, States::OPEN_ROUND, true) && $change->current_round === $round->number && $round->closed_at === null;
             if (! $open && ! $petition->catch_up) {

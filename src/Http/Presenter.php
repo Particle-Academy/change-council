@@ -25,7 +25,8 @@ final class Presenter
     public function summary(Change $change): array
     {
         $round = $change->currentRound();
-        $petitions = $round === null ? collect() : Petition::query()->where('round_id', $round->id)->get();
+        // Withdrawn petitions (their member was removed) are not outstanding votes.
+        $petitions = $round === null ? collect() : Petition::query()->where('round_id', $round->id)->whereNull('withdrawn_at')->get();
 
         return [
             'ref' => $change->ref,
@@ -105,6 +106,7 @@ final class Presenter
                 'delivery_detail' => $p->delivery_detail,
                 'outcome' => $p->outcome,
                 'catch_up' => $p->catch_up,
+                'withdrawn_at' => $p->withdrawn_at?->utc()->format('Y-m-d\TH:i:s\Z'),
                 'effective_silence_policy' => $this->ledger->policyFor($change, $p->agent_address),
                 // The member's weight now; a closed round's tally keeps the weights it used.
                 'weight' => (int) (Consumer::query()->where('address', $p->agent_address)->value('weight') ?? 1),
@@ -144,6 +146,7 @@ final class Presenter
             'source' => $c->source,
             'census_at' => $c->census_at?->utc()->format('Y-m-d\TH:i:s\Z'),
             'notes' => $c->notes,
+            'removed_at' => $c->removed_at?->utc()->format('Y-m-d\TH:i:s\Z'),
         ];
     }
 }

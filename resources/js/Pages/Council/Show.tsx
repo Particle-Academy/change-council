@@ -352,6 +352,11 @@ function PetitionCard({ petition: p }: { petition: PetitionRow }) {
                             catching up
                         </Badge>
                     )}
+                    {p.withdrawn_at && (
+                        <Badge color="zinc" variant="outline" size="sm" data-withdrawn={p.withdrawn_at}>
+                            withdrawn: member removed, not counted
+                        </Badge>
+                    )}
                 </div>
                 <Text size="xs" color="muted">
                     {p.why}. Delivery: {p.delivery}

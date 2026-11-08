@@ -27,10 +27,32 @@ final class Members
 {
     public function __construct(private readonly Ledger $ledger) {}
 
-    /** @return list<array<string, mixed>> */
+    /**
+     * The current members: every row the owner has not removed.
+     *
+     * @return list<array<string, mixed>>
+     */
     public function list(): array
     {
-        $consumers = Consumer::query()->orderBy('address')->get();
+        return $this->rows(Consumer::query()->whereNull('removed_at')->orderBy('address')->get());
+    }
+
+    /**
+     * Former members: rows the owner removed. Kept, with their record, never petitioned.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function former(): array
+    {
+        return $this->rows(Consumer::query()->whereNotNull('removed_at')->orderBy('address')->get());
+    }
+
+    /**
+     * @param  Collection<int, Consumer>  $consumers
+     * @return list<array<string, mixed>>
+     */
+    private function rows(Collection $consumers): array
+    {
         $petitions = Petition::query()->whereIn('agent_address', $consumers->pluck('address')->all())->get();
         $votes = $this->votesFor($petitions);
         $byAddress = $petitions->groupBy('agent_address');
@@ -72,6 +94,7 @@ final class Members
             'watches' => $c->watches,
             'package_count' => count((array) $c->packages),
             'stats' => $stats,
+            'removed_at' => self::at($c->removed_at),
         ];
     }
 
@@ -98,7 +121,7 @@ final class Members
                 'tier' => $p->tier,
                 'delivery' => $p->delivery,
                 'outcome' => $p->outcome,
-                'verdict' => $vote?->verdict ?? $p->outcome ?? (in_array($p->delivery, ['undelivered', 'unreachable'], true) ? $p->delivery : null),
+                'verdict' => $vote?->verdict ?? ($p->withdrawn_at !== null ? 'withdrawn' : null) ?? $p->outcome ?? (in_array($p->delivery, ['undelivered', 'unreachable'], true) ? $p->delivery : null),
                 'vote_status' => $vote?->status,
                 'late' => $vote?->status === 'late',
                 'reason' => $vote?->reason,
@@ -107,6 +130,7 @@ final class Members
                 'queued_at' => self::at($p->queued_at),
                 'sent_at' => self::at($p->sent_at),
                 'replied_at' => self::at($vote?->received_at),
+                'withdrawn' => $p->withdrawn_at !== null,
             ];
         })->values()->all();
     }
@@ -120,11 +144,11 @@ final class Members
     /**
      * @param  Collection<int, Petition>  $petitions
      * @param  array<int, Vote>  $votes
-     * @return array{petitions: int, cast: int, approve: int, conflict: int, abstain: int, missed: int, pending: int, last_vote_at: ?string}
+     * @return array{petitions: int, cast: int, approve: int, conflict: int, abstain: int, missed: int, pending: int, withdrawn: int, last_vote_at: ?string}
      */
     private function stats(Collection $petitions, array $votes): array
     {
-        $stats = ['petitions' => $petitions->count(), 'cast' => 0, 'approve' => 0, 'conflict' => 0, 'abstain' => 0, 'missed' => 0, 'pending' => 0, 'last_vote_at' => null];
+        $stats = ['petitions' => $petitions->count(), 'cast' => 0, 'approve' => 0, 'conflict' => 0, 'abstain' => 0, 'missed' => 0, 'pending' => 0, 'withdrawn' => 0, 'last_vote_at' => null];
         $last = null;
         foreach ($petitions as $p) {
             $vote = $votes[$p->id] ?? null;
@@ -136,6 +160,9 @@ final class Members
                 if ($vote->received_at !== null && ($last === null || $vote->received_at->getTimestamp() > $last->getTimestamp())) {
                     $last = $vote->received_at;
                 }
+            } elseif ($p->withdrawn_at !== null) {
+                // Its member was removed while the round was open: not missed.
+                $stats['withdrawn']++;
             } elseif (in_array($p->outcome, Ledger::SILENT_OUTCOMES, true)) {
                 $stats['missed']++;
             } else {

@@ -54,6 +54,24 @@ test('the profile links a project URL only when it is http or https, and the own
         ->and($member)->toMatch('/canSetPolicy\s*&&/');
 });
 
+test('the profile has an owner-only "Remove from council" control, staged behind a confirmation', function (): void {
+    $member = pageSources()['Member.tsx'];
+
+    expect($member)->toContain('data-action="remove-member"')
+        ->and($member)->toContain('data-action="confirm-remove-member"')
+        ->and($member)->toContain('data-action="cancel-remove-member"')
+        ->and($member)->toContain('Remove from council')
+        ->and($member)->toContain('/remove`');
+});
+
+test('the members list shows removed members apart, under Former members', function (): void {
+    $members = pageSources()['Members.tsx'];
+
+    expect($members)->toContain('Former members')
+        ->and($members)->toContain('data-testid="council-former-members"')
+        ->and($members)->toContain('former_members');
+});
+
 test('the change page shows the threshold arithmetic', function (): void {
     expect(pageSources()['Show.tsx'])->toContain('Blocking weight')
         ->and(pageSources()['Show.tsx'])->toContain('of threshold');

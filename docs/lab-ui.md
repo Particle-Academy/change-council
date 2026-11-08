@@ -15,11 +15,13 @@ Two Inertia pages, built only from Fancy components (react-fancy: `Table`,
   row) in a sortable `Table`: name and address, project and workspace, weight,
   silence policy, declared package count, votes cast, approve/conflict/abstain,
   missed petitions, last vote and census. An owner sets the council's blocking
-  threshold here (`NumberField`).
+  threshold here (`NumberField`). Members the owner removed are listed apart,
+  under **Former members**, with their removal date and votes.
 - **`Council/Member`** (`{prefix}/members/{address}`): one member. Project (name,
   description, URL, workspace, declared and watched packages, internal flag,
   census, source, notes), owner controls (weight, silence policy, project
-  fields; drawn only when the hook allows `owner`, and every PUT asks again),
+  fields, and **Remove from council** behind a confirmation; drawn only when
+  the hook allows `owner`, and every write asks again),
   and the voting record: every petition, newest first, with change, round,
   verdict (or silent/undelivered), lateness, reason, impact, severity, sent and
   replied times. The project URL becomes a link only when it is absolute http

@@ -44,7 +44,7 @@ final class PetitionsCommand extends Command
 
         $labUrl = (string) $this->laravel['config']->get('council.lab_url');
         $out = [];
-        foreach (Petition::query()->where('delivery', 'queued')->orderBy('id')->get() as $petition) {
+        foreach (Petition::query()->where('delivery', 'queued')->whereNull('withdrawn_at')->orderBy('id')->get() as $petition) {
             $change = Change::query()->find($petition->change_id);
             $round = $petition->round;
             if ($change === null || $round->closed_at !== null || ! in_array($change->state, ['round1_open', 'round2_open'], true)) {
