@@ -153,6 +153,8 @@ export type MemberStats = {
     last_vote_at: string | null;
 };
 
+export type CensusRequestState = { id: number; delivery: 'queued' | 'sent'; queued_at: string; sent_at: string | null };
+
 /** A council member (a consumer row). Every string here is agent-supplied: render it as text. */
 export type MemberRow = {
     address: string;
@@ -166,11 +168,15 @@ export type MemberRow = {
     silence_policy: Policy;
     whitelisted: boolean;
     internal: boolean;
+    /** Where `packages` came from: census (the member's own lockfiles), declared or inferred (hand-written). */
     source: string;
     census_at: string | null;
+    /** An outstanding census request (queued for the clerk, or sent and unanswered), else null. */
+    census_request: CensusRequestState | null;
     reachable: boolean | null;
     notes: string | null;
-    packages: (Package & { constraint?: string })[];
+    /** A census row carries the installed `version`; a hand-written row a `constraint`. */
+    packages: (Package & { constraint?: string; version?: string })[];
     watches: Package[];
     package_count: number;
     stats: MemberStats;

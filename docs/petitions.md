@@ -55,6 +55,9 @@ does the same from the detector's major findings, with the report as evidence.
 - **Informed**: consumers that only watch it. They may vote; their silence blocks nothing.
 - **Never**: internal consumers (our own apps; the dogfood rule covers them).
 
+What a consumer declares comes from its [census](census.md) once it has
+answered one (`source: census`), and from the hand-written seed until then.
+
 ## The clerk loop
 
 ```bash

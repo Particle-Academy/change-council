@@ -3,7 +3,7 @@ import { Badge, Button, Callout, Card, Heading, NumberField, StatList, Table, Te
 import { useMemo, useState } from 'react';
 import { type HostLink, type MemberRow, send, type Threshold, usePoll } from './parts/api';
 import { compare, navVariant, nextSort, type Sort } from './parts/nav';
-import { label } from './parts/tone';
+import { censusRequestLabel, label, sourceTone } from './parts/tone';
 
 type Props = {
     members: MemberRow[];
@@ -214,7 +214,12 @@ export default function Members({ members: initial, blocking_threshold, former_m
                                                     {label(m.silence_policy)}
                                                 </Badge>
                                             </Table.Cell>
-                                            <Table.Cell className="text-sm">{m.package_count}</Table.Cell>
+                                            <Table.Cell className="text-sm whitespace-nowrap">
+                                                {m.package_count}{' '}
+                                                <Badge color={sourceTone(m.source)} variant="soft" size="sm" data-source={m.source}>
+                                                    {m.source}
+                                                </Badge>
+                                            </Table.Cell>
                                             <Table.Cell className="text-sm whitespace-nowrap">
                                                 {m.stats.cast} of {m.stats.petitions}
                                                 {m.stats.pending > 0 ? ` (${m.stats.pending} open)` : ''}
@@ -224,7 +229,14 @@ export default function Members({ members: initial, blocking_threshold, former_m
                                             <Table.Cell className="text-sm">{m.stats.abstain}</Table.Cell>
                                             <Table.Cell className="text-sm">{m.stats.missed}</Table.Cell>
                                             <Table.Cell className="text-xs whitespace-nowrap text-zinc-500">{m.stats.last_vote_at ?? 'never'}</Table.Cell>
-                                            <Table.Cell className="text-xs whitespace-nowrap text-zinc-500">{m.census_at ?? 'never'}</Table.Cell>
+                                            <Table.Cell className="text-xs whitespace-nowrap text-zinc-500">
+                                                <div>{m.census_at ?? 'never'}</div>
+                                                {m.census_request && (
+                                                    <Badge color="amber" variant="soft" size="sm" data-census-request={m.census_request.delivery}>
+                                                        {censusRequestLabel(m.census_request)}
+                                                    </Badge>
+                                                )}
+                                            </Table.Cell>
                                         </Table.Row>
                                     ))}
                                 </Table.Body>

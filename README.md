@@ -79,6 +79,7 @@ audited, never thrown. See the
 - [The detector](docs/detector.md): classes, waivers, surface snapshots, what it cannot see
 - [CI usage](docs/ci.md): GitHub Actions and pre-push, pinned SHA plus content hash, never in an id-token job
 - [Petitions and replies](docs/petitions.md): initiation, the clerk loop, wire formats, tally and silence
+- [The census](docs/census.md): members list what their lockfiles install; `COUNCIL-CENSUS v1`
 - [Decision records](docs/decision-records.md): `decision.v1`, signing, verification, the audit chain
 - [The Overwatch feed](docs/feed.md): `feed.v1`, the signed webhook, open questions for civi
 - [Lab UI](docs/lab-ui.md): the pages, and how they were checked in a real browser

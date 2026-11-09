@@ -3,7 +3,7 @@ import { Badge, Button, Callout, Card, Heading, Input, NumberField, Select, Stat
 import { useState } from 'react';
 import { type HostLink, type MemberDetail, type MemberRow, type RecordRow, send, usePoll } from './parts/api';
 import { navVariant, safeUrl } from './parts/nav';
-import { label, POLICIES, severityTone, verdictTone } from './parts/tone';
+import { censusRequestLabel, label, POLICIES, severityTone, sourceTone, verdictTone } from './parts/tone';
 
 type Props = {
     detail: MemberDetail;
@@ -130,13 +130,34 @@ export default function Member({ detail: initial, pollMs, host, canSetPolicy, en
                                     <Text size="sm">-</Text>
                                 )}
                             </div>
-                            <Fact name="Source" value={m.source} />
+                            <div>
+                                <Text size="xs" color="muted">
+                                    Source
+                                </Text>
+                                <Badge color={sourceTone(m.source)} variant="soft" size="sm" data-source={m.source}>
+                                    {m.source}
+                                </Badge>
+                            </div>
                             <Fact name="Census" value={m.census_at ?? 'never'} />
+                            {m.census_request && (
+                                <div data-testid="member-census-request">
+                                    <Text size="xs" color="muted">
+                                        Census request
+                                    </Text>
+                                    <Badge color="amber" variant="soft" size="sm" data-census-request={m.census_request.delivery}>
+                                        {censusRequestLabel(m.census_request)}
+                                    </Badge>
+                                    <Text size="xs" color="muted">
+                                        queued {m.census_request.queued_at}
+                                        {m.census_request.sent_at ? `, sent ${m.census_request.sent_at}` : ''}
+                                    </Text>
+                                </div>
+                            )}
                             <Fact name="Reachable" value={m.reachable === null ? 'unknown' : m.reachable ? 'yes' : 'no'} />
                             <Fact name="Notes" value={m.notes} />
                             <div className="space-y-1">
                                 <Text size="xs" color="muted">
-                                    Declared packages (a required voter on these)
+                                    {m.source === 'census' ? 'Installed packages, from its census' : 'Declared packages'} (a required voter on these)
                                 </Text>
                                 {m.packages.length === 0 ? (
                                     <Text size="sm">-</Text>
@@ -144,7 +165,7 @@ export default function Member({ detail: initial, pollMs, host, canSetPolicy, en
                                     <div className="flex flex-wrap gap-1" data-testid="member-packages">
                                         {m.packages.map((p) => (
                                             <Badge key={`${p.ecosystem}:${p.name}`} color="blue" variant="outline" size="sm">
-                                                {p.name} {p.constraint ?? ''}
+                                                {p.name} {p.version ?? p.constraint ?? ''}
                                             </Badge>
                                         ))}
                                     </div>

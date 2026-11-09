@@ -6,7 +6,8 @@ Notable changes to `particle-academy/change-council`.
 pre-1.0, so breaking changes land in MINOR releases; read those entries before
 upgrading. The wire formats (`COUNCIL-PETITION v1`, `COUNCIL-REPLY v1`,
 `change-council/report.v1`, `change-council/decision.v1`,
-`change-council/feed.v1`, `change-council/surface.v1`) are versioned on their
+`change-council/feed.v1`, `change-council/surface.v1`,
+`COUNCIL-CENSUS-REQUEST v1`, `COUNCIL-CENSUS v1`) are versioned on their
 own: a breaking change to one of them ships as a new version beside the old.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
@@ -14,6 +15,58 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ---
 
 ## [Unreleased]
+
+## [0.6.0] - 2026-11-08
+
+**Consumer action:** run `php artisan migrate` (one additive migration: two new
+tables), then re-publish the pages:
+`php artisan vendor:publish --tag=council-pages --force`. Nothing changes for a
+member until it answers a census; until then its hand-written packages stand.
+
+### Added
+- **The census.** A member's `packages` came only from the hand-written seed
+  (`inferred` or `declared`), so they missed what members really install, and
+  nothing could write `census_at`. Now:
+  - `council:census-requests` queues one `COUNCIL-CENSUS-REQUEST v1` per active,
+    external member with no outstanding request (removed and internal members
+    get none), and lists the queue for the clerk, in the same pattern as
+    `council:petitions` (`--json`, `--mark-sent=<id> --result=<raw JSON>`, plus
+    `--list` to queue nothing). The request asks the member to read its
+    lockfiles and list every `particle-academy/*` (Composer),
+    `@particle-academy/*` (npm) and `fancy-*` (PyPI) package with its installed
+    version. Audited as `census.requested` and `census.<delivery>`.
+  - `council:census-ingest` reads a `COUNCIL-CENSUS v1` reply strictly: one
+    header line, ONE JSON object `{nonce, apps, packages}`, unknown keys refused,
+    a closed ecosystem enum, and size caps (64 KB, 500 packages, 50 apps).
+    The sender must match the request's address and nonce, as for votes. A row
+    that is not a first-party package (or has a non-plain name or version, or
+    repeats) is dropped with a recorded reason. The body is data; nothing in it
+    is executed. `council:ingest` routes a census here, so it is never stored as
+    an invalid vote.
+  - A valid census **replaces** the member's `packages` (`source: census`, each
+    row `{ecosystem, name, version}`) and sets `census_at`. `watches`, owner-set
+    fields and petitions already created are untouched. It is audited as
+    `census.applied` with a before/after diff; the audit carries no free text
+    from the reply, so neither does the feed.
+  - `voters()` uses the census from then on (a census row's petition reads
+    "your census lists ... (census YYYY-MM-DD)"), and `census_stale` reads its
+    age, as before.
+- Members list and profile (pages and API): the packages' **source** as a badge,
+  the census date, and an outstanding **census requested** state (queued or
+  sent). Wire field, additive: a member's `census_request`
+  (`{id, delivery, queued_at, sent_at}` or null). A census package row carries
+  `version` instead of `constraint`.
+- New wire formats, versioned on their own: `COUNCIL-CENSUS-REQUEST v1` and
+  `COUNCIL-CENSUS v1` ([docs/census.md](docs/census.md)).
+- Migration `2026_11_08_100000_create_council_census_tables`:
+  `council_census_requests` and `council_census_replies`. No existing row is
+  changed.
+
+### Changed
+- A petition's `why` is capped at 255 characters (its column's length), since a
+  census name and version are member-supplied.
+- The package's own `phpunit.xml` now also forces in-memory SQLite through
+  `env` and `server`. The test kernel already built that connection explicitly.
 
 ## [0.5.1] - 2026-11-08
 

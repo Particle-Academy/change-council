@@ -231,7 +231,7 @@ test('GET members: every member with weight, policy, package count, vote stats a
     expect($response['status'])->toBe(200)
         ->and(array_keys($member))->toBe([
             'address', 'name', 'workspace', 'project_name', 'project_description', 'project_url', 'weight', 'silence_policy',
-            'whitelisted', 'internal', 'source', 'census_at', 'reachable', 'notes', 'packages', 'watches', 'package_count', 'stats', 'removed_at',
+            'whitelisted', 'internal', 'source', 'census_at', 'census_request', 'reachable', 'notes', 'packages', 'watches', 'package_count', 'stats', 'removed_at',
         ])
         ->and($member['address'])->toBe('moic@moic-suite')
         ->and($member['removed_at'])->toBeNull()

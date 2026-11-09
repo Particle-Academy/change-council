@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ChangeCouncil\Members;
 
 use ChangeCouncil\Ledger\Ledger;
+use ChangeCouncil\Models\CensusRequest;
 use ChangeCouncil\Models\Change;
 use ChangeCouncil\Models\Consumer;
 use ChangeCouncil\Models\Petition;
@@ -56,8 +57,9 @@ final class Members
         $petitions = Petition::query()->whereIn('agent_address', $consumers->pluck('address')->all())->get();
         $votes = $this->votesFor($petitions);
         $byAddress = $petitions->groupBy('agent_address');
+        $requests = $this->outstanding($consumers->pluck('address')->all());
 
-        return $consumers->map(fn (Consumer $c) => $this->profile($c, $this->stats($byAddress->get($c->address, collect()), $votes)))->values()->all();
+        return $consumers->map(fn (Consumer $c) => $this->profile($c, $this->stats($byAddress->get($c->address, collect()), $votes), $requests[$c->address] ?? null))->values()->all();
     }
 
     public function find(string $address): ?Consumer
@@ -66,11 +68,12 @@ final class Members
     }
 
     /** @return array<string, mixed> */
-    public function profile(Consumer $c, ?array $stats = null): array
+    public function profile(Consumer $c, ?array $stats = null, ?CensusRequest $request = null): array
     {
         if ($stats === null) {
             $petitions = Petition::query()->where('agent_address', $c->address)->get();
             $stats = $this->stats($petitions, $this->votesFor($petitions));
+            $request = $this->outstanding([$c->address])[$c->address] ?? null;
         }
 
         return [
@@ -88,6 +91,13 @@ final class Members
             'internal' => (bool) $c->internal,
             'source' => $c->source,
             'census_at' => self::at($c->census_at),
+            // The outstanding census request (queued or sent, not yet answered), or null.
+            'census_request' => $request === null ? null : [
+                'id' => $request->id,
+                'delivery' => $request->delivery,
+                'queued_at' => self::at($request->queued_at),
+                'sent_at' => self::at($request->sent_at),
+            ],
             'reachable' => $c->reachable,
             'notes' => $c->notes,
             'packages' => $c->packages,
@@ -186,6 +196,24 @@ final class Members
         $all = Vote::query()->whereIn('petition_id', $petitions->pluck('id')->all())->whereIn('status', ['counted', 'late'])->orderBy('id')->get();
         foreach ($all->groupBy('petition_id') as $petitionId => $votes) {
             $out[(int) $petitionId] = $votes->where('status', 'counted')->last() ?? $votes->last();
+        }
+
+        return $out;
+    }
+
+    /**
+     * The latest outstanding census request per address: queued or sent, unanswered.
+     *
+     * @param  list<string>  $addresses
+     * @return array<string, CensusRequest>
+     */
+    private function outstanding(array $addresses): array
+    {
+        $out = [];
+        $rows = CensusRequest::query()->whereIn('agent_address', $addresses)->whereNull('answered_at')
+            ->whereIn('delivery', ['queued', 'sent'])->orderBy('id')->get();
+        foreach ($rows as $request) {
+            $out[$request->agent_address] = $request;
         }
 
         return $out;

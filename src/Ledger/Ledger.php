@@ -199,15 +199,18 @@ final class Ledger
             foreach ($change->packages as $p) {
                 $declared = $consumer->declares($p['ecosystem'], $p['name']);
                 if ($declared !== null && $required === null) {
-                    $census = $consumer->census_at === null ? 'no census yet, '.$consumer->source : 'census '.$consumer->census_at->format('Y-m-d');
-                    $required = "you declared {$p['name']} ".($declared['constraint'] ?? '*')." ({$census})";
+                    // A census row carries the installed version; a hand-written one a constraint.
+                    $required = $consumer->source === 'census' && $consumer->census_at !== null
+                        ? "your census lists {$p['name']} ".($declared['version'] ?? '*').' (census '.$consumer->census_at->format('Y-m-d').')'
+                        : "you declared {$p['name']} ".($declared['constraint'] ?? $declared['version'] ?? '*').' ('.($consumer->census_at === null ? 'no census yet, '.$consumer->source : 'census '.$consumer->census_at->format('Y-m-d')).')';
                 }
                 if ($consumer->watchesPackage($p['ecosystem'], $p['name']) && $watched === null) {
                     $watched = "you watch {$p['name']}";
                 }
             }
             if ($required !== null) {
-                $out[] = [$consumer, 'required', $required];
+                // `why` is a 255-character column; a census name and version may be long.
+                $out[] = [$consumer, 'required', mb_substr($required, 0, 255)];
             } elseif ($watched !== null) {
                 $out[] = [$consumer, 'informed', $watched];
             }

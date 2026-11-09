@@ -2,4 +2,12 @@
 <phpunit bootstrap="vendor/autoload.php" colors="true" cacheDirectory=".phpunit.cache" failOnWarning="true" failOnRisky="true">
     <testsuites><testsuite name="ChangeCouncil"><directory>tests</directory></testsuite></testsuites>
     <source><include><directory>src</directory></include></source>
+    <php>
+        <!-- TestApp already builds an in-memory SQLite connection; forced here as
+             well (both $_ENV and $_SERVER) so nothing can ever reach a real database. -->
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
+        <server name="DB_CONNECTION" value="sqlite" force="true"/>
+        <server name="DB_DATABASE" value=":memory:" force="true"/>
+    </php>
 </phpunit>

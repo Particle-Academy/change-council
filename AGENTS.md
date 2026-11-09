@@ -57,6 +57,17 @@ Two halves in one repo:
   `petition.withdrawn`; every tally read (`tallyChange`, `countedVotes`, the
   summary counts, the clerk's queue) skips a withdrawn petition, and Ingest
   refuses a reply to one as `invalid`/`petition_withdrawn`.
+- Census (0.6.0): `Census\CensusIngest` is the ONLY writer of a census
+  (`source = census`, `census_at`, and the `packages` it replaces). Order:
+  replay check, size cap, flags, strict parse (`Census\CensusParser`), nonce
+  lookup, sender match, already-answered, member-removed, then apply. It never
+  touches `watches`, owner-set fields or existing petitions, and its audit
+  event carries only validated names, codes and counts. Non-first-party rows
+  are dropped with a reason (`not_first_party`, `bad_name`, `bad_version`,
+  `duplicate`), never applied. `Census\Census` queues requests (one
+  outstanding per active external member) and records send results;
+  `council:ingest` routes a `COUNCIL-CENSUS v1` message to `CensusIngest`, so
+  `Petitions\Ingest` stays the only writer of votes.
 - Weights: `Ledger::weigh()` is the ONE place a member's weight affects an
   outcome. Blocking-severity conflicts block only when their members' summed
   weight reaches `blockingThreshold()` (owner setting in `council_settings`,

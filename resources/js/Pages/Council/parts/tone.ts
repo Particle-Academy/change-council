@@ -37,6 +37,19 @@ export function severityTone(severity: string): Tone {
     return 'amber';
 }
 
+/** Where a member's packages came from: its own census is the only measured source. */
+export function sourceTone(source: string): Tone {
+    if (source === 'census') return 'green';
+    if (source === 'declared') return 'blue';
+    return 'zinc';
+}
+
+/** An outstanding census request, as a short label: queued for the clerk, or sent and unanswered. */
+export function censusRequestLabel(request: { delivery: string } | null): string | null {
+    if (request === null) return null;
+    return request.delivery === 'sent' ? 'census requested (sent)' : 'census requested (queued)';
+}
+
 /** The two silence policies, as Select options. */
 export const POLICIES: { value: string; label: string }[] = [
     { value: 'escalate', label: 'escalate to the owner' },

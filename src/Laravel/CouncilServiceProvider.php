@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ChangeCouncil\Laravel;
 
 use ChangeCouncil\Audit\AuditLog;
+use ChangeCouncil\Census\Census;
+use ChangeCouncil\Census\CensusIngest;
 use ChangeCouncil\Console;
 use ChangeCouncil\Council;
 use ChangeCouncil\Detector\Detector;
@@ -53,6 +55,8 @@ final class CouncilServiceProvider extends ServiceProvider
         Console\ReviseCommand::class,
         Console\WithdrawCommand::class,
         Console\PagesCheckCommand::class,
+        Console\CensusRequestsCommand::class,
+        Console\CensusIngestCommand::class,
     ];
 
     public function register(): void
@@ -95,6 +99,8 @@ final class CouncilServiceProvider extends ServiceProvider
             $app->make(OwnerEventNotifier::class),
         ));
         $this->app->bind(Ingest::class, fn (Application $app) => new Ingest($app['db']->connection(), $app->make(AuditLog::class), $app->make(Ledger::class)));
+        $this->app->bind(Census::class, fn (Application $app) => new Census($app['db']->connection(), $app->make(AuditLog::class), (string) $app['config']->get('council.lab_url', '')));
+        $this->app->bind(CensusIngest::class, fn (Application $app) => new CensusIngest($app['db']->connection(), $app->make(AuditLog::class)));
         $this->app->singleton(RecordSigner::class, fn (Application $app) => new RecordSigner(
             $app['config']->get('council.signing.secret_key'),
             (array) $app['config']->get('council.signing.public_keys', []),
