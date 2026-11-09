@@ -83,6 +83,9 @@ test('council:census-requests queues one request per active external member, wit
         ->toContain('composer.lock')
         ->toContain('package-lock.json')
         ->toContain('COUNCIL-CENSUS v1')
+        // The example reply survives the console byte for byte: an agent copies it.
+        ->toContain('"packages":[{"ecosystem":"composer|npm|pypi","name":"particle-academy/...","version":"1.2.3"}]}')
+        ->and($out[0]['text'])->toBe(\ChangeCouncil\Census\CensusText::render($moic, 'https://lab.example.test/council'))
         ->and($moic->delivery)->toBe('queued')
         ->and(AuditEvent::query()->where('type', 'census.requested')->count())->toBe(2);
 });
