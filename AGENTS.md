@@ -89,6 +89,11 @@ Two halves in one repo:
   `Http\OwnersAuthorizer` (`Council::authorizeOwners()`) is the opt-in
   owner-only hook over `council.owners`; an empty list allows nobody. It is
   never bound by default.
+- Owner actions record the id from `Http\ActorResolver` (0.7.0): the
+  principal's email/key by default, or `Council::resolveActorUsing()`'s answer.
+  A bad answer (non-string, blank, over 191 characters, invalid UTF-8, any C0/C1
+  control or DEL) throws `Refused('invalid_actor')`, mapped to 500, BEFORE the
+  ledger is called. Never fall back to the email.
 - `Models\AuditEvent` throws on update/delete; the migration adds SQLite
   triggers. `AuditLog::verify()` reads raw rows, not models.
 - `Feed\Feed` never emits reply free text (it masks `note`/`reason`).

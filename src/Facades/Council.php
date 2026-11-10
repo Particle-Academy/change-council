@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \ChangeCouncil\Petitions\Ingest ingest()
  * @method static void authorizeUsing(\Closure $callback)
  * @method static void authorizeOwners()
+ * @method static void resolveActorUsing(callable $resolver)
  * @method static void notifyUsing(\ChangeCouncil\Notify\OwnerEventNotifier|\Closure $notifier)
  * @method static void notifyGenie()
  * @method static array notifierStatus()

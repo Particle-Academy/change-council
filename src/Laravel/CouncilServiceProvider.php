@@ -14,6 +14,7 @@ use ChangeCouncil\Feed\Feed;
 use ChangeCouncil\Feed\HttpSender;
 use ChangeCouncil\Feed\LaravelHttpSender;
 use ChangeCouncil\Feed\WebhookEmitter;
+use ChangeCouncil\Http\ActorResolver;
 use ChangeCouncil\Http\Api;
 use ChangeCouncil\Http\Authorizer;
 use ChangeCouncil\Http\DenyAll;
@@ -109,7 +110,7 @@ final class CouncilServiceProvider extends ServiceProvider
         $this->app->bind(Feed::class, fn (Application $app) => new Feed((string) $app['config']->get('council.origin', 'fancy')));
         $this->app->bind(Presenter::class, fn (Application $app) => new Presenter($app->make(Ledger::class)));
         $this->app->bind(Members::class, fn (Application $app) => new Members($app->make(Ledger::class)));
-        $this->app->bind(Api::class, fn (Application $app) => new Api($app->make(Ledger::class), $app->make(Presenter::class), $app->make(Feed::class), $app->make(Authorizer::class), $app->make(Members::class)));
+        $this->app->bind(Api::class, fn (Application $app) => new Api($app->make(Ledger::class), $app->make(Presenter::class), $app->make(Feed::class), $app->make(Authorizer::class), $app->make(Members::class), $app->bound(ActorResolver::class) ? $app->make(ActorResolver::class) : null));
         $this->app->bind(Detector::class, fn (Application $app) => new Detector(
             (string) $app['config']->get('council.detector.node', 'node'),
             $app['config']->get('council.detector.script'),

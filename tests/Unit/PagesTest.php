@@ -151,6 +151,69 @@ test('the list page draws each ref as a link, not as text that underlines on hov
         ->and(array_filter($classes, static fn (string $c): bool => str_starts_with($c, 'text-') && ! str_starts_with($c, 'text-sm')))->not->toBeEmpty();
 });
 
+/*
+ * 0.7.0: at a 390px viewport the Change page's five tabs pushed the document
+ * to 426px wide (#council-tab-audit ended at right=426.45), so the whole page
+ * scrolled sideways. The tab list now scrolls inside its own box: overflow-x
+ * on the list, and tabs that neither shrink nor wrap. The list keeps
+ * react-fancy's role="tablist" and arrow-key handling, and a focused tab is
+ * scrolled into view by the browser.
+ */
+test('every tab list scrolls sideways inside its own box instead of widening the page', function (): void {
+    $found = 0;
+    foreach (pageSources() as $name => $source) {
+        preg_match_all('/<Tabs\.List\b[^>]*>/s', $source, $lists);
+        foreach ($lists[0] as $tag) {
+            $found++;
+            expect($tag)->toMatch('/className="[^"]*\boverflow-x-auto\b[^"]*"/', "{$name}: {$tag}");
+        }
+        preg_match_all('/<Tabs\.Tab\b[^>]*>/s', $source, $tabs);
+        foreach ($tabs[0] as $tag) {
+            expect($tag)->toMatch('/className="[^"]*\bshrink-0\b[^"]*"/', "{$name}: {$tag}")
+                ->and($tag)->toMatch('/className="[^"]*\bwhitespace-nowrap\b[^"]*"/', "{$name}: {$tag}");
+        }
+    }
+    expect($found)->toBeGreaterThanOrEqual(1);
+});
+
+/*
+ * Measured in the same pass, on the Change page at 390px: the silence-policy
+ * table had no scroll box, so react-fancy's overflow-hidden frame cut off its
+ * last column; and the audit timeline's hashes and JSON, which have no break
+ * points, pushed the document to 825px once the Audit tab was open.
+ */
+test('every table scrolls sideways inside its own frame', function (): void {
+    $found = 0;
+    foreach (pageSources() as $name => $source) {
+        preg_match_all('/<Table(?=[\s>])[^>]*>/s', $source, $m);
+        foreach ($m[0] as $tag) {
+            $found++;
+            expect($tag)->toMatch('/className="[^"]*\boverflow-x-auto\b[^"]*"/', "{$name}: {$tag}");
+        }
+    }
+    expect($found)->toBeGreaterThanOrEqual(8);
+});
+
+test('the audit timeline wraps unbroken hashes and JSON instead of widening the page', function (): void {
+    preg_match('/<Timeline\b[^>]*?data-testid="council-audit"[^>]*?className="([^"]*)"/s', pageSources()['Show.tsx'], $m);
+
+    expect($m[1] ?? '')->toContain('[overflow-wrap:anywhere]')
+        ->and($m[1] ?? '')->toContain('min-w-0');
+});
+
+test('every tab carries a stable handle and keeps its id', function (): void {
+    $tabs = 0;
+    foreach (pageSources() as $name => $source) {
+        preg_match_all('/<Tabs\.Tab\b[^>]*>/s', $source, $m);
+        foreach ($m[0] as $tag) {
+            $tabs++;
+            expect($tag)->toMatch('/<Tabs\.Tab\s+data-action="council-tab-[a-z]+"/', "{$name}: {$tag}")
+                ->and($tag)->toMatch('/\bid="council-tab-[a-z]+"/', "{$name}: {$tag}");
+        }
+    }
+    expect($tabs)->toBe(5);
+});
+
 test('every interactive element carries a stable handle', function (): void {
     foreach (pageSources() as $name => $source) {
         preg_match_all('/<(Button|Select|Input|Textarea|Checkbox)\b[^>]*>/s', $source, $m);

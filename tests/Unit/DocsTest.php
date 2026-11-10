@@ -36,3 +36,25 @@ test('the quick start leads with the owner-only authorizer and says why', functi
         ->and($quickstart)->toMatch('/open\s+registration/i')
         ->and($quickstart)->toMatch('/empty\s+list\s+allows\s+nobody/i');
 });
+
+/*
+ * 0.7.0: the quick start suggested `js/pages/council`. The pages render as
+ * `Council/Index` etc., so a resolver that maps the name literally finds no
+ * `council/Index.tsx` on a case-sensitive filesystem.
+ */
+test('no doc suggests a lower-case council page folder, and the quick start warns about case', function (): void {
+    foreach (docSources() as $name => $source) {
+        expect($source)->not->toMatch('#js/[Pp]ages/council\b#', $name);
+    }
+
+    expect(docSources()['laravel-quickstart.md'])->toContain('js/pages/Council')
+        ->and(docSources()['laravel-quickstart.md'])->toMatch('/case-sensitive filesystems/i');
+});
+
+test('the README documents resolveActorUsing and its refusal', function (): void {
+    $readme = docSources()['README.md'];
+
+    expect($readme)->toContain('Council::resolveActorUsing(')
+        ->and($readme)->toContain('191 characters')
+        ->and($readme)->toContain('invalid_actor');
+});

@@ -66,6 +66,20 @@ Council::routes();
 Owner-only on purpose: on a host with open registration, "any signed-in user"
 is anyone. See the [quick start](docs/laravel-quickstart.md#2-authorization-and-routes).
 
+Optional: name the owner the way your app does. Owner actions are recorded as
+`owner:<email>` (the user's key when it has no email). `Council::resolveActorUsing()`
+maps the authenticated user to a different id instead, recorded as
+`owner:<id>` in the audit log and the decision:
+
+```php
+Council::resolveActorUsing(fn ($user): string => 'github:'.$user->github_login);
+```
+
+The answer must be a non-empty string of at most 191 characters with no
+control characters or newlines. A bad answer refuses the owner action with
+`invalid_actor` (HTTP 500) and records nothing; it never falls back to the
+email, because the audit log is append-only.
+
 Optional, and off by default: `Council::notifyGenie()` (or
 `COUNCIL_NOTIFY_GENIE=true`) sends owner events to Genie's app inbox after
 commit. These are a proposal awaiting the owner, initiation approved or

@@ -20,15 +20,22 @@ use Illuminate\Database\Eloquent\Model;
  * takes the authenticated principal and the decoded body, and returns a status
  * plus JSON. Order of checks: principal present, Change found, then the
  * authorization hook for the ability. Owner actions record `owner:<identity>`,
- * where the identity is the principal's email when it has one, else its key.
+ * where the identity is the principal's email when it has one, else its key,
+ * unless the host maps it with `Council::resolveActorUsing()` ({@see ActorResolver}).
  */
 final class Api
 {
-    public function __construct(private readonly Ledger $ledger, private readonly Presenter $presenter, private readonly Feed $feed, private readonly Authorizer $authorizer, private readonly ?Members $members = null) {}
+    public function __construct(private readonly Ledger $ledger, private readonly Presenter $presenter, private readonly Feed $feed, private readonly Authorizer $authorizer, private readonly ?Members $members = null, private readonly ?ActorResolver $actors = null) {}
 
     private function members(): Members
     {
         return $this->members ?? new Members($this->ledger);
+    }
+
+    /** Who an owner action is recorded as; throws Refused(invalid_actor) on a bad hook answer. */
+    private function actor(mixed $principal): string
+    {
+        return ($this->actors ?? new ActorResolver)->resolve($principal);
     }
 
     /** GET /members: every current member with its counts, former (removed) members apart, and the council's blocking threshold. */
@@ -88,7 +95,7 @@ final class Api
             if (! self::closed($body, ['threshold'])) {
                 return self::error(422, 'invalid_request');
             }
-            $this->ledger->setBlockingThreshold($body['threshold'], self::identity($principal));
+            $this->ledger->setBlockingThreshold($body['threshold'], $this->actor($principal));
 
             return new ApiResponse(200, ['blocking_threshold' => $this->ledger->threshold()]);
         });
@@ -100,7 +107,7 @@ final class Api
             if (! self::closed($body, $required, $optional)) {
                 return self::error(422, 'invalid_request');
             }
-            $action($body, self::identity($principal));
+            $action($body, $this->actor($principal));
             $consumer = $this->members()->find($address) ?? throw new Refused('not_found');
 
             return new ApiResponse(200, ['member' => $this->members()->profile($consumer)]);
@@ -200,7 +207,7 @@ final class Api
             return self::error(422, 'invalid_request');
         }
 
-        return $this->guard(fn () => new ApiResponse(200, ['consumer' => Presenter::consumer($this->ledger->setSilencePolicy($address, $body['policy'], self::identity($principal)))]));
+        return $this->guard(fn () => new ApiResponse(200, ['consumer' => Presenter::consumer($this->ledger->setSilencePolicy($address, $body['policy'], $this->actor($principal)))]));
     }
 
     // ------------------------------------------------------------------
@@ -211,7 +218,7 @@ final class Api
             if (! self::closed($body, $required, $optional)) {
                 return self::error(422, 'invalid_request');
             }
-            $updated = $action($change, $body, self::identity($principal));
+            $updated = $action($change, $body, $this->actor($principal));
 
             return new ApiResponse(200, ['change' => $this->presenter->detail($updated)['change']]);
         });
@@ -264,6 +271,9 @@ final class Api
             return match ($e->reason) {
                 'not_found' => self::error(404, 'not_found'),
                 'invalid_state' => self::error(409, 'invalid_state'),
+                // The host's resolveActorUsing() hook answered badly: a server
+                // misconfiguration, not the caller's request.
+                'invalid_actor' => self::error(500, 'invalid_actor', $e->context),
                 default => self::error(422, $e->reason, $e->context),
             };
         }

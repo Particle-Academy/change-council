@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ChangeCouncil;
 
 use ChangeCouncil\Audit\AuditLog;
+use ChangeCouncil\Http\ActorResolver;
 use ChangeCouncil\Http\Authorizer;
 use ChangeCouncil\Http\CallbackAuthorizer;
 use ChangeCouncil\Http\OwnersAuthorizer;
@@ -72,6 +73,25 @@ final class Council
                 $gate->define('council-owner', static fn (mixed $user): bool => $authorizer->includes($user));
             }
         }
+    }
+
+    /**
+     * Who an owner action is recorded as (CC-fancy-0021). The callable gets the
+     * authenticated user and returns the id stored in the audit log and the
+     * decision, as `owner:<id>` (an answer that already starts with `owner:`
+     * is kept as is). Without a hook the id is the user's email, else its key.
+     *
+     *     Council::resolveActorUsing(fn ($user): string => 'github:'.$user->github_login);
+     *
+     * The answer must be a non-empty string of at most 191 characters with no
+     * control characters or newlines. Anything else refuses the action with
+     * `invalid_actor` (HTTP 500); it never falls back to the email.
+     *
+     * @param  callable(mixed): string  $resolver
+     */
+    public function resolveActorUsing(callable $resolver): void
+    {
+        $this->container->instance(ActorResolver::class, new ActorResolver(Closure::fromCallable($resolver)));
     }
 
     /**

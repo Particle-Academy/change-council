@@ -94,20 +94,20 @@ export default function Show({ detail: initial, pollMs, host, endpoints }: Props
                 <OwnerActions detail={detail} onPick={setAction} />
 
                 <Tabs activeTab={tab} onTabChange={setTab} variant="underline">
-                    <Tabs.List>
-                        <Tabs.Tab value="overview" id="council-tab-overview">
+                    <Tabs.List className="overflow-x-auto overflow-y-hidden">
+                        <Tabs.Tab data-action="council-tab-overview" value="overview" id="council-tab-overview" className="shrink-0 whitespace-nowrap focus-visible:-outline-offset-2">
                             Overview
                         </Tabs.Tab>
-                        <Tabs.Tab value="rounds" id="council-tab-rounds">
+                        <Tabs.Tab data-action="council-tab-rounds" value="rounds" id="council-tab-rounds" className="shrink-0 whitespace-nowrap focus-visible:-outline-offset-2">
                             Rounds ({detail.rounds.length})
                         </Tabs.Tab>
-                        <Tabs.Tab value="evidence" id="council-tab-evidence">
+                        <Tabs.Tab data-action="council-tab-evidence" value="evidence" id="council-tab-evidence" className="shrink-0 whitespace-nowrap focus-visible:-outline-offset-2">
                             Evidence ({c.evidence.findings?.length ?? 0})
                         </Tabs.Tab>
-                        <Tabs.Tab value="silence" id="council-tab-silence">
+                        <Tabs.Tab data-action="council-tab-silence" value="silence" id="council-tab-silence" className="shrink-0 whitespace-nowrap focus-visible:-outline-offset-2">
                             Silence policy
                         </Tabs.Tab>
-                        <Tabs.Tab value="audit" id="council-tab-audit">
+                        <Tabs.Tab data-action="council-tab-audit" value="audit" id="council-tab-audit" className="shrink-0 whitespace-nowrap focus-visible:-outline-offset-2">
                             Audit ({detail.audit.length})
                         </Tabs.Tab>
                     </Tabs.List>
@@ -132,6 +132,7 @@ export default function Show({ detail: initial, pollMs, host, endpoints }: Props
                         <Tabs.Panel value="audit">
                             <Timeline
                                 data-testid="council-audit"
+                                className="min-w-0 [overflow-wrap:anywhere]"
                                 events={detail.audit.map((e) => ({
                                     date: e.at.replace('T', ' ').slice(0, 19),
                                     title: `${e.type} - ${e.actor}`,
@@ -224,7 +225,7 @@ function Overview({ detail }: { detail: Detail }) {
                             </Badge>
                         ))}
                     </div>
-                    <Table>
+                    <Table className="overflow-x-auto">
                         <Table.Body>
                             {c.packages.map((p) => (
                                 <Table.Row key={`${p.ecosystem}:${p.name}`}>
@@ -388,7 +389,7 @@ function VoteBlock({ vote: v }: { vote: Vote }) {
                 </Callout>
             )}
             {v.impact.length > 0 && (
-                <Table>
+                <Table className="overflow-x-auto">
                     <Table.Head>
                         <Table.Row>
                             <Table.Cell header>App</Table.Cell>
@@ -490,7 +491,7 @@ function SilencePolicies({ detail, onSet }: { detail: Detail; onSet: (address: s
             {petitions.length === 0 ? (
                 <Text color="muted">No consumer has been petitioned on this Change yet.</Text>
             ) : (
-                <Table data-testid="council-silence">
+                <Table className="overflow-x-auto" data-testid="council-silence">
                     <Table.Head>
                         <Table.Row>
                             <Table.Cell header>Agent</Table.Cell>

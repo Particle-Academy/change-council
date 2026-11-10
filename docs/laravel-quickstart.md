@@ -22,8 +22,16 @@ COUNCIL_WHITELIST_AGENTS=fancy@fancy-agi
 COUNCIL_OWNERS=owner@example.com
 ```
 
-Prism's lab globs `./pages/**`; set `council.pages.publish_path` to
-`js/pages/council` before publishing there. Paths are case-sensitive on Linux.
+The pages render as `Council/Index`, `Council/Show`, `Council/Members` and
+`Council/Member`, so the published folder must be named `Council` with a
+capital C, under whatever root your Inertia `resolve` globs. The default
+(`js/Pages/Council`) fits a `./Pages/**` glob. A lab that globs `./pages/**`
+(Prism's) sets `council.pages.publish_path` to `js/pages/Council` before
+publishing: the root stays `pages`, the page folder stays `Council`.
+
+> **Case-sensitive filesystems (Linux, most CI and production hosts):** a
+> folder named `council` will not match `Council/Index`, and the page fails
+> to resolve there even though it works on Windows or macOS.
 
 ## 2. Authorization and routes
 

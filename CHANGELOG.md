@@ -16,6 +16,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-10
+
+**Consumer action:** re-publish the pages:
+`php artisan vendor:publish --tag=council-pages --force`, then
+`php artisan council:pages-check`. No migration. Nothing else changes unless you
+register the new hook.
+
+### Added
+- **`Council::resolveActorUsing(callable)`** (CC-fancy-0021). The callable gets
+  the authenticated user and returns the id an owner action is recorded as, in
+  the audit log and the decision (`owner:<id>`; an answer already starting with
+  `owner:` is kept as is). Without a hook nothing changes: `owner:<email>`, or
+  the user's key when it has no email. The answer is validated: a non-empty
+  string of at most 191 characters, valid UTF-8, with no control characters or
+  newlines. Anything else refuses the owner action with `invalid_actor` (HTTP
+  500, with a `detail` naming the hook) and records nothing. It never falls
+  back to the email, because the audit log is append-only.
+
+### Fixed
+- **The Change page no longer widens a phone screen.** Its five tabs sat in a
+  list with no wrap and no scroll, so at a 390px viewport the document grew to
+  426px and the whole page scrolled sideways. The tab list now scrolls inside
+  its own box (`overflow-x-auto`), tabs neither shrink nor wrap, and arrow-key
+  navigation and each tab's `id` are unchanged. Each tab also gains a
+  `data-action="council-tab-<name>"` handle. The same pass found two more on
+  that page: the silence-policy table (and the package and impact tables) had
+  no scroll box, so react-fancy's frame clipped the last column; and the audit
+  timeline's hashes and JSON widened the page to 825px once the Audit tab was
+  open. Every table now scrolls inside its frame and the timeline wraps long
+  tokens. The Index, Members and Member pages were measured at 390px and
+  already contain their tables. **Re-publish the pages** to get this;
+  `council:pages-check` reports the old copy as stale.
+- **The quick start's publish path was lower case.** It suggested
+  `js/pages/council` for a lab that globs `./pages/**`; the pages render as
+  `Council/Index` and so on, so on a case-sensitive filesystem (Linux, most CI
+  and production) a literal resolver found nothing. It now says
+  `js/pages/Council`, with a warning about case. If you followed the old line,
+  rename the folder to `Council` and re-publish the pages.
+
 ## [0.6.0] - 2026-11-08
 
 **Consumer action:** run `php artisan migrate` (one additive migration: two new
