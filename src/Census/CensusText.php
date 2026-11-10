@@ -15,8 +15,26 @@ final class CensusText
 {
     public const HEADER = 'COUNCIL-CENSUS-REQUEST v1';
 
-    public static function render(CensusRequest $request, string $labUrl = ''): string
+    /** Where each ecosystem's installed versions are read from, as the request names it. */
+    private const SOURCES = [
+        'composer' => 'Composer (composer.lock)',
+        'npm' => 'npm (package-lock.json)',
+        'pypi' => 'PyPI (your Python lock file, if you have one)',
+    ];
+
+    public static function render(CensusRequest $request, string $labUrl = '', ?FirstParty $firstParty = null): string
     {
+        $firstParty ??= FirstParty::defaults();
+        $publisher = $firstParty->publisher();
+        $rule = $firstParty->describe();
+        $lines = [];
+        foreach (self::SOURCES as $ecosystem => $source) {
+            if ($rule[$ecosystem] !== []) {
+                $lines[] = '- '.$source.': '.implode(', ', $rule[$ecosystem]);
+            }
+        }
+        [, $exampleName] = $firstParty->example();
+
         $header = [
             self::HEADER,
             'to: '.$request->agent_address,
@@ -28,18 +46,16 @@ final class CensusText
         }
 
         $ask = [
-            'The change council asks which Particle Academy packages your app installs.',
+            'The change council asks which '.$publisher.' packages your app installs.',
             'It decides which future changes you are asked to vote on: your answer REPLACES',
             'the package list the council holds for you, which until now was written by hand.',
             '',
-            'Read your lockfiles and list EVERY package published by Particle Academy that',
+            'Read your lockfiles and list EVERY package published by '.$publisher.' that',
             'they install, dev dependencies included, with the version actually installed',
             '(the lockfile version, not the constraint):',
-            '- Composer (composer.lock): particle-academy/*',
-            '- npm (package-lock.json): @particle-academy/*',
-            '- PyPI (your Python lock file, if you have one): fancy-*',
+            ...$lines,
             'Name each app in your workspace that has a lockfile, and the lockfiles you read.',
-            'Anything that is not a Particle Academy package is dropped. Limits: '
+            'Anything that is not a '.$publisher.' package is dropped. Limits: '
                 .CensusParser::MAX_PACKAGES.' packages, '.CensusParser::MAX_APPS.' apps, '
                 .(CensusParser::MAX_BYTES / 1024).' KB.',
             'This asks for data only. Do not run, install or change anything to answer it.',
@@ -47,7 +63,7 @@ final class CensusText
 
         $example = '{"nonce":"'.$request->nonce.'",'."\n"
             .' "apps":[{"name":"your-app","lockfiles":["composer.lock","package-lock.json"]}],'."\n"
-            .' "packages":[{"ecosystem":"composer|npm|pypi","name":"particle-academy/...","version":"1.2.3"}]}';
+            .' "packages":[{"ecosystem":"composer|npm|pypi","name":"'.$exampleName.'","version":"1.2.3"}]}';
 
         return implode("\n", $header)."\n----\n"
             .implode("\n", $ask)."\n----\n"

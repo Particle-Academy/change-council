@@ -33,13 +33,37 @@ Every step is in the audit log: `census.requested`, `census.sent` /
 
 A header (`to`, `request`, `nonce`, `lab`), plain instructions, and the reply
 format. It asks the member to read its lockfiles and list every package
-published by Particle Academy with the installed version:
+published by `council.census.publisher` (default `Particle Academy`) with the
+installed version, one line per ecosystem the first-party rule covers. With the
+defaults:
 
 - Composer, from `composer.lock`: `particle-academy/*`
 - npm, from `package-lock.json`: `@particle-academy/*`
 - PyPI, from the Python lock file if any: `fancy-*`
 
 It asks for data only, and says so.
+
+## The first-party rule
+
+`council.census.first_party` decides which names a census keeps, per ecosystem:
+
+```php
+'census' => [
+    'publisher' => 'Prism',
+    'first_party' => [
+        'pypi' => ['patterns' => ['prism-ai-*'], 'names' => ['prism-conformance']],
+    ],
+],
+```
+
+A pattern is an exact name or a literal prefix with one trailing `*`; `names`
+are exact. Nothing in it is a regex, and matching is a prefix or exact
+comparison, so no configured pattern runs against a reply. Unset, the rule is
+Fancy's (the three prefixes above). Set, it is the whole rule: an ecosystem it
+leaves out keeps nothing. PyPI entries are in PEP 503 normalised form. The rule
+is validated when the provider boots, and an invalid entry throws an
+`InvalidArgumentException` naming it (`council.census.first_party.pypi.patterns.0`)
+rather than being skipped. See the README for the full list of what is refused.
 
 ## COUNCIL-CENSUS v1 (strict)
 
@@ -61,8 +85,8 @@ the census, when it is:
 
 | reason | |
 |---|---|
-| `not_first_party` | the name lacks the ecosystem's first-party prefix (`particle-academy/`, `@particle-academy/`, `fancy-`) |
-| `bad_name` | the prefix is right, but the name is not a plain package name |
+| `not_first_party` | the name is outside the ecosystem's first-party rule (by default the prefixes `particle-academy/`, `@particle-academy/`, `fancy-`) |
+| `bad_name` | the rule matches, but the name is not a plain package name |
 | `bad_version` | the version is not a plain identifier (a range, a URL, a command) |
 | `duplicate` | the same package was already listed |
 

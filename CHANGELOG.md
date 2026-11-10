@@ -16,6 +16,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-10
+
+**Consumer action:** none for Fancy's councils; the defaults are unchanged. A
+council for any other estate should set `council.census.first_party` (and
+`council.census.publisher`), or every census keeps none of its packages. No
+migration, no page re-publish.
+
+### Fixed
+- **The census first-party rule is host configuration, not Fancy's names.**
+  `CensusParser` hard-coded `particle-academy/*` (Composer),
+  `@particle-academy/*` (npm) and `fancy-*` (PyPI), so another estate's council
+  dropped all of its own packages as `not_first_party`: in Prism's council its
+  PyPI distributions (`prism-ai-core` among them) and `prism-conformance`. The
+  rule is now `council.census.first_party`, per ecosystem, a list of `patterns`
+  (an exact name or a literal prefix with one trailing `*`, never a regex) plus
+  optional exact `names`. Unset, it is exactly the old rule. It is validated
+  once at boot; an invalid entry throws an `InvalidArgumentException` naming it
+  and is never ignored. Matching is a prefix or exact comparison, so nothing
+  from config runs as a regex against a reply.
+- **The census request names the host's own packages.** Its per-ecosystem lines,
+  its example name and the publisher it names (`council.census.publisher`,
+  default `Particle Academy`) come from the same config. With the defaults the
+  text is byte for byte the 0.7.0 text.
+- **A name or version ending in a newline is refused.** The name and version
+  shapes ended in `$` without the `D` modifier, which also matches before a
+  final newline, so `"particle-academy/prism\n"` was accepted and stored with
+  the newline. They are now `bad_name` / `bad_version`.
+
+### Changed
+- `CensusParser::parse()` and `::reason()` take an optional `FirstParty`, and
+  `CensusText::render()` an optional third argument; omitted, they use the
+  defaults. `CensusParser::PREFIXES` is deprecated (it holds the defaults only).
+
 ## [0.7.0] - 2026-11-10
 
 **Consumer action:** re-publish the pages:

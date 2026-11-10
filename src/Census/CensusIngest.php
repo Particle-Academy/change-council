@@ -30,7 +30,7 @@ use Illuminate\Support\Carbon;
  */
 final class CensusIngest
 {
-    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit) {}
+    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly ?FirstParty $firstParty = null) {}
 
     /** The raw message JSON from `agentinbox receive`: {id, from, at, text}. */
     public function receiveGenieMessage(string $json): CensusResult
@@ -55,7 +55,7 @@ final class CensusIngest
                 // Kept, but only up to the cap: an oversized message is a way to fill the ledger.
                 return $this->store($messageId, $from, mb_strcut($text, 0, CensusParser::MAX_BYTES, 'UTF-8'), $at, null, 'invalid', 'too_large');
             }
-            $parsed = CensusParser::parse($text);
+            $parsed = CensusParser::parse($text, $this->firstParty);
             if (! $parsed['ok']) {
                 return $this->store($messageId, $from, $text, $at, null, 'invalid', $parsed['problem']);
             }

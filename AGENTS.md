@@ -68,6 +68,12 @@ Two halves in one repo:
   outstanding per active external member) and records send results;
   `council:ingest` routes a `COUNCIL-CENSUS v1` message to `CensusIngest`, so
   `Petitions\Ingest` stays the only writer of votes.
+- First-party rule (0.7.1): `Census\FirstParty`, built from
+  `council.census.first_party` and validated in the provider's `boot()` (a bad
+  entry throws, naming it). Patterns are a literal prefix plus one trailing `*`
+  or an exact name, matched with `str_starts_with`/`===`: never compile config
+  into a regex that runs on reply text. The name shapes in `CensusParser::NAMES`
+  are fixed and end in `$` with `D`. Unset, the rule is `FirstParty::DEFAULTS`.
 - Weights: `Ledger::weigh()` is the ONE place a member's weight affects an
   outcome. Blocking-severity conflicts block only when their members' summed
   weight reaches `blockingThreshold()` (owner setting in `council_settings`,

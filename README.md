@@ -87,6 +87,42 @@ rejected, override, revoke, a closed tally and escalation. The notice carries re
 audited, never thrown. See the
 [quick start](docs/laravel-quickstart.md#6-owner-event-notices-optional).
 
+### Your first-party packages (the census)
+
+A [census](docs/census.md) keeps only the packages your estate publishes and
+drops the rest as `not_first_party`. Which names count is host configuration,
+`council.census.first_party`, per ecosystem (`composer`, `npm`, `pypi`). The
+defaults are Fancy's (`particle-academy/*`, `@particle-academy/*`, `fancy-*`),
+so a council for any other estate must set its own:
+
+```php
+// config/council.php
+'census' => [
+    'publisher' => 'Prism', // named in the census request
+    'first_party' => [
+        'composer' => ['patterns' => ['prism-php/*']],
+        'npm' => ['patterns' => ['@prism-ai/*']],
+        'pypi' => ['patterns' => ['prism-ai-*'], 'names' => ['prism-conformance']],
+    ],
+],
+```
+
+- A pattern is an exact name, or a literal prefix with ONE trailing `*`. It is
+  never a regex: matching is a prefix or exact comparison, so no configured
+  pattern is ever run against a member's reply. `names` lists exact names.
+  PyPI entries are written in PEP 503 normalised form (lower case, `-` only),
+  because reply names are normalised before the check.
+- When `first_party` is set it is the whole rule. An ecosystem it leaves out has
+  no first-party packages, and the census request does not ask for it.
+- The rule is validated once, when the service provider boots. A bad entry (a
+  regex, a bare `*`, a `*` anywhere but the end, a character outside the
+  ecosystem's name alphabet, an unknown key or ecosystem, more than 50 patterns
+  or 200 names, or anything over 214 characters) throws an
+  `InvalidArgumentException` naming the entry, such as
+  `council.census.first_party.pypi.patterns.0`. It is never skipped silently.
+- The census request lists the configured patterns and names, and names the
+  `publisher`, so a member is asked for your packages rather than Fancy's.
+
 ## Docs
 
 - [Laravel quick start](docs/laravel-quickstart.md): install, authorization, pages, commands, API

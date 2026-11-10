@@ -74,6 +74,27 @@ return [
     'census_max_age_days' => 30,
 
     /*
+    | Which package names a census keeps as first-party, per ecosystem. Rows
+    | outside it are dropped as `not_first_party`. A pattern is an exact name or
+    | a literal prefix ending in ONE `*` (never a regex); `names` lists exact
+    | names. PyPI entries are in PEP 503 normalised form (`prism-ai-*`).
+    |
+    | Leave `first_party` out (or null) for these defaults. When it is set it is
+    | the whole rule: an ecosystem it leaves out has no first-party packages.
+    | It is validated at boot; an invalid entry throws, naming the entry.
+    |
+    | `publisher` is who the census request says publishes them.
+    */
+    'census' => [
+        'publisher' => 'Particle Academy',
+        'first_party' => [
+            'composer' => ['patterns' => ['particle-academy/*']],
+            'npm' => ['patterns' => ['@particle-academy/*']],
+            'pypi' => ['patterns' => ['fancy-*']],
+        ],
+    ],
+
+    /*
     | Who may initiate straight into round 1. Everything else lands in
     | `awaiting_owner` (HITL) with a pros/cons summary, and no petition goes out
     | until the owner approves. A GitHub issue counts as whitelisted only when

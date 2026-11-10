@@ -7,6 +7,7 @@ namespace ChangeCouncil\Laravel;
 use ChangeCouncil\Audit\AuditLog;
 use ChangeCouncil\Census\Census;
 use ChangeCouncil\Census\CensusIngest;
+use ChangeCouncil\Census\FirstParty;
 use ChangeCouncil\Console;
 use ChangeCouncil\Council;
 use ChangeCouncil\Detector\Detector;
@@ -100,8 +101,14 @@ final class CouncilServiceProvider extends ServiceProvider
             $app->make(OwnerEventNotifier::class),
         ));
         $this->app->bind(Ingest::class, fn (Application $app) => new Ingest($app['db']->connection(), $app->make(AuditLog::class), $app->make(Ledger::class)));
-        $this->app->bind(Census::class, fn (Application $app) => new Census($app['db']->connection(), $app->make(AuditLog::class), (string) $app['config']->get('council.lab_url', '')));
-        $this->app->bind(CensusIngest::class, fn (Application $app) => new CensusIngest($app['db']->connection(), $app->make(AuditLog::class)));
+        // The host's first-party rule, validated once; boot() builds it so a bad
+        // rule fails there, loudly, rather than at the first census.
+        $this->app->singleton(FirstParty::class, fn (Application $app) => FirstParty::fromConfig(
+            $app['config']->get('council.census.first_party'),
+            $app['config']->get('council.census.publisher'),
+        ));
+        $this->app->bind(Census::class, fn (Application $app) => new Census($app['db']->connection(), $app->make(AuditLog::class), (string) $app['config']->get('council.lab_url', ''), $app->make(FirstParty::class)));
+        $this->app->bind(CensusIngest::class, fn (Application $app) => new CensusIngest($app['db']->connection(), $app->make(AuditLog::class), $app->make(FirstParty::class)));
         $this->app->singleton(RecordSigner::class, fn (Application $app) => new RecordSigner(
             $app['config']->get('council.signing.secret_key'),
             (array) $app['config']->get('council.signing.public_keys', []),
@@ -130,6 +137,7 @@ final class CouncilServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $root = dirname(__DIR__, 2);
+        $this->app->make(FirstParty::class);
         $this->loadMigrationsFrom($root.'/database/migrations');
         if ($this->app['config']->get('council.routes.enabled') === true) {
             Routes::register($this->app->make('router'));

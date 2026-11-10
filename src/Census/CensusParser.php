@@ -48,28 +48,39 @@ final class CensusParser
 
     public const MAX_VERSION = 100;
 
-    /** @var array<string, string> ecosystem => the prefix every first-party name carries */
+    /**
+     * @deprecated 0.7.1: the DEFAULT prefixes only. Which names are first-party
+     * is host configuration (`council.census.first_party`); read {@see FirstParty}.
+     *
+     * @var array<string, string>
+     */
     public const PREFIXES = [
         'composer' => 'particle-academy/',
         'npm' => '@particle-academy/',
         'pypi' => 'fancy-',
     ];
 
-    /** @var array<string, string> ecosystem => the full name a first-party package must match */
+    /**
+     * @var array<string, string> ecosystem => what a plain package name looks
+     *                            like. Fixed, never from config; every one is
+     *                            unambiguous (separators delimit the runs), so
+     *                            none can backtrack badly.
+     */
     private const NAMES = [
-        'composer' => '#^particle-academy/[a-z0-9](?:[_.-]?[a-z0-9]+)*$#',
-        'npm' => '#^@particle-academy/[a-z0-9][a-z0-9._-]*$#',
-        'pypi' => '#^fancy(?:-[a-z0-9]+)+$#',
+        'composer' => '#^[a-z0-9]+(?:[_.-][a-z0-9]+)*/[a-z0-9]+(?:[_.-][a-z0-9]+)*$#D',
+        'npm' => '#^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$#D',
+        'pypi' => '#^[a-z0-9]+(?:-[a-z0-9]+)*$#D',
     ];
 
     /** An installed version: a plain identifier, never a range, a URL or a command. */
-    private const VERSION = '#^v?[0-9A-Za-z][0-9A-Za-z.+_-]*$#';
+    private const VERSION = '#^v?[0-9A-Za-z][0-9A-Za-z.+_-]*$#D';
 
     /**
      * @return array{ok: true, census: array{nonce: string, apps: list<array{name: string, lockfiles: list<string>}>, packages: list<array{ecosystem: string, name: string, version: string}>, dropped: list<array{ecosystem: string, name: string, reason: string}>}}|array{ok: false, problem: string}
      */
-    public static function parse(string $text): array
+    public static function parse(string $text, ?FirstParty $firstParty = null): array
     {
+        $firstParty ??= FirstParty::defaults();
         if (strlen($text) > self::MAX_BYTES) {
             return self::fail('too_large');
         }
@@ -143,7 +154,7 @@ final class CensusParser
         foreach ($rows as $row) {
             $ecosystem = $row['ecosystem'];
             $name = $ecosystem === 'pypi' ? self::pypiName($row['name']) : $row['name'];
-            $reason = self::reason($ecosystem, $name, $row['version']);
+            $reason = self::reason($ecosystem, $name, $row['version'], $firstParty);
             if ($reason === null && isset($seen[$ecosystem.':'.$name])) {
                 $reason = 'duplicate';
             }
@@ -165,13 +176,13 @@ final class CensusParser
     }
 
     /** null when the row is a first-party package at a plain version, else why it is dropped. */
-    public static function reason(string $ecosystem, string $name, string $version): ?string
+    public static function reason(string $ecosystem, string $name, string $version, ?FirstParty $firstParty = null): ?string
     {
-        $prefix = self::PREFIXES[$ecosystem] ?? null;
-        if ($prefix === null || ! str_starts_with($name, $prefix)) {
+        $firstParty ??= FirstParty::defaults();
+        if (! $firstParty->isFirstParty($ecosystem, $name)) {
             return 'not_first_party';
         }
-        if (preg_match(self::NAMES[$ecosystem], $name) !== 1) {
+        if (! self::validName($ecosystem, $name)) {
             return 'bad_name';
         }
         if (preg_match(self::VERSION, $version) !== 1) {
@@ -181,11 +192,17 @@ final class CensusParser
         return null;
     }
 
+    /** Whether the name is a plain package name for the ecosystem (PyPI: already normalised). */
+    public static function validName(string $ecosystem, string $name): bool
+    {
+        return isset(self::NAMES[$ecosystem]) && strlen($name) <= self::MAX_NAME && preg_match(self::NAMES[$ecosystem], $name) === 1;
+    }
+
     /**
      * PEP 503 normalisation (lower case, runs of `-`, `_`, `.` become one `-`)
      * when the name is a valid PEP 508 name; otherwise unchanged, so it fails.
      */
-    private static function pypiName(string $name): string
+    public static function pypiName(string $name): string
     {
         if (preg_match('#^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$#', $name) !== 1) {
             return $name;

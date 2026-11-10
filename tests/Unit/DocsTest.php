@@ -51,6 +51,16 @@ test('no doc suggests a lower-case council page folder, and the quick start warn
         ->and(docSources()['laravel-quickstart.md'])->toMatch('/case-sensitive filesystems/i');
 });
 
+test('the README documents the census first-party rule', function (): void {
+    $readme = docSources()['README.md'];
+
+    expect($readme)->toContain('council.census.first_party')
+        ->and($readme)->toContain('prism-ai-*')
+        ->and($readme)->toContain('never a regex')
+        ->and($readme)->toContain('council.census.first_party.pypi.patterns.0')
+        ->and(docSources()['census.md'])->toContain('council.census.first_party');
+});
+
 test('the README documents resolveActorUsing and its refusal', function (): void {
     $readme = docSources()['README.md'];
 

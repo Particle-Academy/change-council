@@ -22,7 +22,7 @@ use Illuminate\Support\Carbon;
  */
 final class Census
 {
-    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly string $labUrl = '') {}
+    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly string $labUrl = '', private readonly ?FirstParty $firstParty = null) {}
 
     /**
      * Queues one request per active external member without an outstanding one.
@@ -71,7 +71,7 @@ final class Census
                 'to' => $request->agent_address,
                 'nonce' => $request->nonce,
                 'queued_at' => $request->queued_at->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
-                'text' => CensusText::render($request, $this->labUrl),
+                'text' => CensusText::render($request, $this->labUrl, $this->firstParty),
             ];
         }
 
