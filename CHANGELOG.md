@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-12
+
 **Consumer action:** after upgrading, run
 `php artisan council:petitions --supersede-stale` once to record petitions an
 older release left `queued` as `superseded`. It is idempotent and deletes
