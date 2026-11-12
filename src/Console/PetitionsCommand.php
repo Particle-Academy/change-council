@@ -16,12 +16,17 @@ use Illuminate\Console\Command;
  * still queued, with the exact text, for the clerk agent to send with its own
  * `agentinbox send`. The clerk then records each raw tool result with
  * --mark-sent=<petition id> --result='<raw JSON>'.
+ *
+ * --supersede-stale records petitions an older release left `queued` after
+ * their round closed (or their Change was decided or withdrawn, or their
+ * member was removed) as `superseded`, each audited. Running it again
+ * changes nothing. No row is deleted.
  */
 final class PetitionsCommand extends Command
 {
     use Concerns;
 
-    protected $signature = 'council:petitions {--json : Print JSON} {--mark-sent= : Petition id to record a send result for} {--result= : The raw agentinbox send tool result (JSON)}';
+    protected $signature = 'council:petitions {--json : Print JSON} {--mark-sent= : Petition id to record a send result for} {--result= : The raw agentinbox send tool result (JSON)} {--supersede-stale : Record every queued petition that can never be sent as superseded (idempotent)}';
 
     protected $description = 'List queued petitions for the clerk to send, or record a send result';
 
@@ -42,14 +47,19 @@ final class PetitionsCommand extends Command
             return 0;
         }
 
+        if ($this->option('supersede-stale')) {
+            $ids = $ledger->supersedeStale();
+            $this->info(count($ids).' stale petition(s) superseded.');
+
+            return 0;
+        }
+
         $labUrl = (string) $this->laravel['config']->get('council.lab_url');
         $out = [];
-        foreach (Petition::query()->where('delivery', 'queued')->whereNull('withdrawn_at')->orderBy('id')->get() as $petition) {
-            $change = Change::query()->find($petition->change_id);
+        // Petition::sendable() is the one definition; the page counts the same set.
+        foreach (Petition::query()->sendable()->orderBy('id')->get() as $petition) {
+            $change = Change::query()->findOrFail($petition->change_id);
             $round = $petition->round;
-            if ($change === null || $round->closed_at !== null || ! in_array($change->state, ['round1_open', 'round2_open'], true)) {
-                continue;
-            }
             $out[] = ['petition' => $petition->id, 'change' => $change->ref, 'round' => $round->number, 'to' => $petition->agent_address, 'tier' => $petition->tier, 'text' => PetitionText::render($change, $round, $petition, $labUrl)];
         }
         if ($this->option('json')) {

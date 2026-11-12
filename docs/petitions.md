@@ -74,6 +74,15 @@ php artisan council:tally                                       # schedule every
 `ok: true` counts as `sent`. A refusal that names reachability or permission is
 `unreachable`; anything else unconfirmed is `undelivered`.
 
+The list holds only **sendable** petitions (`Petition::sendable()`): queued, not
+withdrawn, round not closed, Change in `round1_open` or `round2_open`. The lab's
+"queued and not yet sent" count is the same set. A petition that can no longer
+be sent and was never answered (its round closed, the owner decided the Change,
+the initiator withdrew it, or its member was removed) is recorded as
+`superseded` and audited as `petition.superseded` with a `because`. Rows an
+older release left `queued` are superseded by
+`php artisan council:petitions --supersede-stale` (idempotent; nothing deleted).
+
 ## COUNCIL-PETITION v1
 
 ```

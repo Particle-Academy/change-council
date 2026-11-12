@@ -43,7 +43,8 @@ final class Presenter
                 'total' => $petitions->count(),
                 'answered' => $petitions->filter(fn (Petition $p) => in_array($p->outcome, ['approve', 'conflict', 'abstain'], true))->count(),
                 'conflicts' => $petitions->where('outcome', 'conflict')->count(),
-                'queued' => $petitions->where('delivery', 'queued')->count(),
+                // Only petitions the clerk can still send: the same set council:petitions lists.
+                'queued' => $round === null ? 0 : Petition::query()->sendable()->where('round_id', $round->id)->count(),
             ],
             'approved_unopposed' => (bool) $change->approved_unopposed,
             'approved_with_notes' => (bool) $change->approved_with_notes,

@@ -258,6 +258,53 @@ final class Ledger
         });
     }
 
+    /**
+     * A queued petition that can no longer be sent (its round closed, its
+     * Change was decided or withdrawn, its member was removed) is recorded as
+     * `superseded` and audited as `petition.superseded`. Never deleted. One
+     * that was answered is left as it is (see Petition::scopeStaleQueued).
+     */
+    private function supersede(Petition $petition, string $actor, string $because): void
+    {
+        // A reply proves it arrived, whatever the clerk recorded: not superseded.
+        if ($petition->delivery !== 'queued' || Vote::query()->where('petition_id', $petition->id)->exists()) {
+            return;
+        }
+        $petition->forceFill(['delivery' => 'superseded'])->save();
+        $this->audit->append($petition->change_id, $actor, 'petition.superseded', [
+            'petition' => $petition->id, 'to' => $petition->agent_address, 'round' => (int) Round::query()->whereKey($petition->round_id)->value('number'), 'because' => $because,
+        ]);
+    }
+
+    private function supersedeRound(Round $round, string $actor, string $because): void
+    {
+        // Called once the round is closed, so every queued petition in it is stale.
+        foreach (Petition::query()->where('round_id', $round->id)->staleQueued()->orderBy('id')->get() as $petition) {
+            $this->supersede($petition, $actor, $because);
+        }
+    }
+
+    /**
+     * Housekeeping for rows an older release left `queued` after the round
+     * closed: every queued petition outside Petition::sendable() becomes
+     * `superseded`, audited. Idempotent; not an owner action (it decides
+     * nothing, it records what already happened).
+     *
+     * @return list<int> the petition ids superseded
+     */
+    public function supersedeStale(): array
+    {
+        return $this->db->transaction(function (): array {
+            $ids = [];
+            foreach (Petition::query()->staleQueued()->lockForUpdate()->orderBy('id')->get() as $petition) {
+                $this->supersede($petition, 'ledger', 'not_sendable');
+                $ids[] = $petition->id;
+            }
+
+            return $ids;
+        });
+    }
+
     // ------------------------------------------------------------------ tally
 
     /**
@@ -383,6 +430,7 @@ final class Ledger
             'round' => $round->number, 'outcome' => $state, 'reason' => $reason, 'counts' => $counts,
             'blocking_weight' => $weighing['blocking_weight'], 'threshold' => $weighing['threshold'],
         ]);
+        $this->supersedeRound($round, 'tally', 'round_closed');
         if ($unweighted !== [] && ! $change->blocking_below_threshold) {
             $change->forceFill(['blocking_below_threshold' => true])->save();
         }
@@ -443,6 +491,9 @@ final class Ledger
             $this->audit->append($change->id, self::owner($owner), 'owner.override', [
                 'decision' => $decision, 'reason' => $reason, 'from_state' => $from, 'acknowledged' => $acknowledge,
             ]);
+            if ($round !== null) {
+                $this->supersedeRound($round, self::owner($owner), 'change_decided');
+            }
             $this->decide($change, $target, self::owner($owner), $reason, $decision === 'approve' ? $acknowledge : []);
             $this->notifyAfterCommit($change, $decision === 'approve' ? OwnerEvent::OVERRIDE_APPROVE : OwnerEvent::OVERRIDE_REJECT, $from);
 
@@ -480,6 +531,9 @@ final class Ledger
             }
             $change->forceFill(['state' => States::WITHDRAWN])->save();
             $this->audit->append($change->id, $by, 'change.withdrawn', []);
+            if ($round !== null) {
+                $this->supersedeRound($round, $by, 'change_withdrawn');
+            }
 
             return $change->fresh();
         });
@@ -652,6 +706,7 @@ final class Ledger
                     'petition' => $petition->id, 'to' => $address, 'round' => $round->number, 'tier' => $petition->tier,
                     'because' => 'member_removed', 'counted' => false,
                 ]);
+                $this->supersede($petition, self::owner($owner), 'member_removed');
                 $withdrawn[] = $petition->id;
             }
             $this->audit->append(null, self::owner($owner), 'consumer.removed', ['address' => $address, 'withdrawn' => $withdrawn, 'reason' => $reason]);

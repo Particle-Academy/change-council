@@ -83,6 +83,13 @@ Two halves in one repo:
   pre-0.5 rule. Never re-weigh a closed round. Do not put `weight` in
   `Consumer::$attributes`: a host migration that seeds consumers before the 0.5
   migration would then insert a column that does not exist yet.
+- Sendable: `Petition::sendable()` is the ONE definition of a petition the
+  clerk can still send; `council:petitions` and the summary's `queued` count
+  both use it. Never count `delivery = 'queued'` directly (`SendableTest`
+  scans `src/`). Closing a round, `override`, `withdraw` and `removeMember`
+  record unsent, unanswered petitions as `superseded` (`petition.superseded`);
+  `Ledger::supersedeStale()` (`council:petitions --supersede-stale`) does the
+  same for older rows.
 - `Members\Members` is the read model for the members pages and API (stats,
   voting record). Read-only.
 - `Petitions\DeliveryResult` reads a send result at three refusal depths;

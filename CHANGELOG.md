@@ -16,6 +16,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+**Consumer action:** after upgrading, run
+`php artisan council:petitions --supersede-stale` once to record petitions an
+older release left `queued` as `superseded`. It is idempotent and deletes
+nothing. No migration, no page re-publish.
+
+### Fixed
+- **The lab's "N petition(s) are queued and not yet sent" counted petitions
+  that can never be sent.** The summary counted every `delivery = queued` row
+  in the current round, while `council:petitions` lists only petitions that are
+  not withdrawn, in an open round, of a Change in `round1_open`/`round2_open`.
+  On a live council the page said 27 when the clerk had 0 to send. There is now
+  one definition, `Petition::sendable()`, used by both; what the command lists
+  is unchanged.
+- **Petitions that can no longer be sent stop reading as `queued`.** When a
+  round closes (tally), the owner overrides (approve or reject, vote skipped),
+  the initiator withdraws the Change, or a member is removed, each of its
+  unsent, unanswered petitions gets the new delivery state `superseded`,
+  appended to the audit log as `petition.superseded` with a `because`
+  (`round_closed`, `change_decided`, `change_withdrawn`, `member_removed`). A
+  petition that has a reply is left as it is: the reply proves it arrived.
+  `council:petitions --supersede-stale` (`Ledger::supersedeStale()`) does the
+  same for existing rows, with `because: not_sendable` and actor `ledger`.
+
 ## [0.7.1] - 2026-11-10
 
 **Consumer action:** none for Fancy's councils; the defaults are unchanged. A
