@@ -186,6 +186,27 @@ test('both pages carry a way back to the host: "/" by default, or council.host_u
     expect(http('GET', '', null, $user)['body']['props']['host'])->toBeNull();
 });
 
+/*
+ * A host that draws the council inside its own navigation (fancy-labs does)
+ * already has Changes and Members in its menu, so the pages' own row is a
+ * duplicate there. council.pages.show_nav = false tells every page to skip it.
+ */
+test('every page is told to draw its own Changes/Members row by default, and not to when council.pages.show_nav is false', function (): void {
+    httpApp(fn (): bool => true);
+    propose();
+    $user = User::create(['name' => 'Ada']);
+    $pages = ['', '/changes/CC-fancy-0001', '/members', '/members/moic@moic-suite'];
+
+    foreach ($pages as $path) {
+        expect(http('GET', $path, null, $user)['body']['props']['showNav'])->toBe(true, "default {$path}");
+    }
+
+    app('config')->set('council.pages.show_nav', false);
+    foreach ($pages as $path) {
+        expect(http('GET', $path, null, $user)['body']['props']['showNav'])->toBe(false, "show_nav=false {$path}");
+    }
+});
+
 test('the list page is told whether the viewer may set a silence policy, by asking the hook for `owner`', function (): void {
     $asked = [];
     httpApp(function (mixed $user, string $ability) use (&$asked): bool {

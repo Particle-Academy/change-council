@@ -12,6 +12,8 @@ type Props = {
     former_members?: MemberRow[];
     pollMs: number;
     host: HostLink;
+    /** Draw the Changes/Members row; false when the host renders the pages inside its own navigation. */
+    showNav?: boolean;
     /** Whether the hook allows `owner` for this viewer. Display only: the API asks again. */
     canSetPolicy: boolean;
     endpoints: { index: string; members: string; api: string; threshold: string; show: string };
@@ -40,7 +42,7 @@ const SORTERS: Record<Key, (m: MemberRow) => string | number | null> = {
  * the owner removed are listed apart, under Former members. Built only from
  * Fancy components; every member string is rendered as text.
  */
-export default function Members({ members: initial, blocking_threshold, former_members = [], pollMs, host, canSetPolicy, endpoints }: Props) {
+export default function Members({ members: initial, blocking_threshold, former_members = [], pollMs, host, showNav = true, canSetPolicy, endpoints }: Props) {
     const [data, setData, pollError] = usePoll<{ members: MemberRow[]; blocking_threshold: Threshold; former_members?: MemberRow[] }>(
         endpoints.api,
         { members: initial, blocking_threshold, former_members },
@@ -93,12 +95,16 @@ export default function Members({ members: initial, blocking_threshold, former_m
                             {host.label}
                         </Button>
                     )}
-                    <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('members', 'changes')} size="sm" id="council-nav-changes">
-                        Changes
-                    </Button>
-                    <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('members', 'members')} size="sm" id="council-nav-members">
-                        Members
-                    </Button>
+                    {showNav && (
+                        <>
+                            <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('members', 'changes')} size="sm" id="council-nav-changes">
+                                Changes
+                            </Button>
+                            <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('members', 'members')} size="sm" id="council-nav-members">
+                                Members
+                            </Button>
+                        </>
+                    )}
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>

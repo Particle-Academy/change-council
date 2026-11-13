@@ -28,7 +28,8 @@ Two Inertia pages, built only from Fancy components (react-fancy: `Table`,
   or https (`parts/nav.ts` `safeUrl`, after the server's own check).
 - **Every page** starts with a link back to the host app (`council.host_url`,
   `council.host_label`; an empty URL hides it) and the Council nav (Changes,
-  Members).
+  Members). A host that draws the pages inside its own navigation sets
+  `council.pages.show_nav` to `false` to leave the Council nav out.
 - **`Council/Show`** also shows each round's threshold arithmetic ("Blocking
   weight 2 of threshold 3") and each petitioned member's weight.
 - **`Council/Show`**: one Change. Owner actions (approve or reject a HITL

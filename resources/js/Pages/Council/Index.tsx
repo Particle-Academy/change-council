@@ -11,6 +11,8 @@ type Props = {
     filters: { state?: string; package?: string; class?: string };
     pollMs: number;
     host: HostLink;
+    /** Draw the Changes/Members row; false when the host renders the pages inside its own navigation. */
+    showNav?: boolean;
     /** Whether the hook allows `owner` for this viewer. Display only: the API asks again. */
     canSetPolicy: boolean;
     endpoints: { changes: string; show: string; consumers: string; index: string; members: string };
@@ -20,7 +22,7 @@ type Props = {
  * Council/Index: every Change, filterable, polled slowly. Built only from Fancy
  * components. Nothing here renders text as HTML.
  */
-export default function Index({ changes: initial, consumers: initialConsumers, filters, pollMs, host, canSetPolicy, endpoints }: Props) {
+export default function Index({ changes: initial, consumers: initialConsumers, filters, pollMs, host, showNav = true, canSetPolicy, endpoints }: Props) {
     const [state, setState] = useState(filters.state ?? '');
     const [pkg, setPkg] = useState(filters.package ?? '');
     const [cls, setCls] = useState(filters.class ?? '');
@@ -69,12 +71,16 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
                                     {host.label}
                                 </Button>
                             )}
-                            <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('changes', 'changes')} size="sm" id="council-nav-changes">
-                                Changes
-                            </Button>
-                            <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('changes', 'members')} size="sm" id="council-nav-members">
-                                Members
-                            </Button>
+                            {showNav && (
+                                <>
+                                    <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('changes', 'changes')} size="sm" id="council-nav-changes">
+                                        Changes
+                                    </Button>
+                                    <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('changes', 'members')} size="sm" id="council-nav-members">
+                                        Members
+                                    </Button>
+                                </>
+                            )}
                         </div>
                         <Heading as="h1" size="2xl" weight="semibold">
                             Change council

@@ -35,6 +35,23 @@ test('every page draws the Council nav, with Members in it', function (): void {
     }
 });
 
+/*
+ * council.pages.show_nav (0.8.0): a host that renders the pages inside its own
+ * navigation turns the row off. The prop defaults to true, so a host that never
+ * sends it (or an older controller) still gets the row, and the row's buttons
+ * are drawn only inside the showNav guard.
+ */
+test('every page draws its Changes/Members row only when showNav, which defaults to true', function (): void {
+    foreach (['Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx'] as $name) {
+        $source = pageSources()[$name];
+
+        expect($source)->toMatch('/showNav\??:\s*boolean/', $name)
+            ->and($source)->toMatch('/\bshowNav\s*=\s*true\b/', $name)
+            ->and($source)->toMatch('/\{showNav\s*&&\s*\(\s*<>\s*<Button data-action="council-nav-changes"[^>]*>[\s\S]*?<Button data-action="council-nav-members"[^>]*>[\s\S]*?<\/Button>\s*<\/>\s*\)\}/', $name)
+            ->and(preg_match_all('/data-action="council-nav-(changes|members)"/', $source))->toBe(2, $name);
+    }
+});
+
 test('the members list is a sortable Fancy table', function (): void {
     $members = pageSources()['Members.tsx'];
 

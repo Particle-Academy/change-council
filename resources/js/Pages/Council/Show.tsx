@@ -9,6 +9,8 @@ type Props = {
     detail: Detail;
     pollMs: number;
     host: HostLink;
+    /** Draw the Changes/Members row; false when the host renders the pages inside its own navigation. */
+    showNav?: boolean;
     endpoints: { index: string; detail: string; owner: string; changeSilencePolicy: string; consumers: string; members: string };
 };
 
@@ -20,7 +22,7 @@ type Action = 'approve_initiation' | 'reject_initiation' | 'approve' | 'reject' 
  * whitespace-pre-wrap, or a read-only CodeView. Never HTML, never rendered
  * markup, so a reply cannot draw links, images or fake UI here.
  */
-export default function Show({ detail: initial, pollMs, host, endpoints }: Props) {
+export default function Show({ detail: initial, pollMs, host, showNav = true, endpoints }: Props) {
     const [detail, setDetail, pollError] = usePoll<Detail>(endpoints.detail, initial, pollMs);
     // A HITL initiation has no rounds yet; its pros and cons are on Overview.
     const [tab, setTab] = useState(initial.change.state === 'awaiting_owner' ? 'overview' : 'rounds');
@@ -53,12 +55,16 @@ export default function Show({ detail: initial, pollMs, host, endpoints }: Props
                                 {host.label}
                             </Button>
                         )}
-                        <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('changes', 'changes')} size="sm" id="council-nav-changes">
-                            All Changes
-                        </Button>
-                        <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('changes', 'members')} size="sm" id="council-nav-members">
-                            Members
-                        </Button>
+                        {showNav && (
+                            <>
+                                <Button data-action="council-nav-changes" href={endpoints.index} as={Link} variant={navVariant('changes', 'changes')} size="sm" id="council-nav-changes">
+                                    All Changes
+                                </Button>
+                                <Button data-action="council-nav-members" href={endpoints.members} as={Link} variant={navVariant('changes', 'members')} size="sm" id="council-nav-members">
+                                    Members
+                                </Button>
+                            </>
+                        )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <Heading as="h1" size="2xl" weight="semibold">

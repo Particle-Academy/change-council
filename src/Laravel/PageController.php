@@ -36,6 +36,7 @@ final class PageController
             'filters' => (object) $filters,
             'pollMs' => $this->pollMs(),
             'host' => $this->host(),
+            'showNav' => $this->showNav(),
             // Draws the silence-policy control. Display only: the PUT asks the
             // same hook again, for the consumer it names.
             'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => null]),
@@ -60,6 +61,7 @@ final class PageController
             'detail' => $detail->body,
             'pollMs' => $this->pollMs(),
             'host' => $this->host(),
+            'showNav' => $this->showNav(),
             'endpoints' => [
                 'index' => $this->url(''),
                 'detail' => $this->url('api/v1/changes/'.$ref),
@@ -84,6 +86,7 @@ final class PageController
             'former_members' => $list->body['former_members'],
             'pollMs' => $this->pollMs(),
             'host' => $this->host(),
+            'showNav' => $this->showNav(),
             // Draws the threshold control. Display only: the PUT asks the hook again.
             'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => null]),
             'endpoints' => [
@@ -107,6 +110,7 @@ final class PageController
             'detail' => $detail->body,
             'pollMs' => $this->pollMs(),
             'host' => $this->host(),
+            'showNav' => $this->showNav(),
             // Draws the owner controls. Display only: each PUT asks the hook again.
             'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => $address]),
             'endpoints' => [
@@ -123,6 +127,12 @@ final class PageController
     {
         // Never faster than 15s: a lab is served by ONE php-cgi worker.
         return max(15000, (int) $this->config->get('council.pages.poll_ms', 15000));
+    }
+
+    /** Whether the pages draw their own Changes/Members row; a host with its own navigation turns it off. */
+    private function showNav(): bool
+    {
+        return (bool) $this->config->get('council.pages.show_nav', true);
     }
 
     /** @return array{url: string, label: string}|null the way back to the host app; null hides it */

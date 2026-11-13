@@ -32,6 +32,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Nothing to do: the default is `NoStepUp`, which changes nothing, and the body
   key `step_up` is reserved. Re-publish the pages
   (`vendor:publish --tag=council-pages --force`) to get the handler.
+- **`council.pages.show_nav` hides the pages' own Changes/Members row.** A
+  host that renders the council pages inside its own navigation (fancy-labs
+  does) saw that row as a duplicate of its menu. Every page now takes a
+  `showNav` prop, sent from the new config key (env
+  `COUNCIL_PAGES_SHOW_NAV`); when it is `false` the row is not drawn. The
+  "back to the app" link is unaffected (it still follows `council.host_url`).
+  Nothing to do: the default is `true`, and the prop defaults to `true` in the
+  pages, so the output is unchanged. Re-publish the pages
+  (`vendor:publish --tag=council-pages --force`); `council:pages-check` reports
+  the old copy as stale until you do.
 
 ## [0.7.2] - 2026-11-12
 

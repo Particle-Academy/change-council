@@ -105,6 +105,10 @@ Both pages draw a link back to the host app at the top: `council.host_url`
 (env `COUNCIL_HOST_URL`, default `/`) labelled `council.host_label`
 (env `COUNCIL_HOST_LABEL`, default "Back to the app"). An empty URL hides it.
 
+Every page also draws its own Changes/Members row. If your app renders the
+pages inside its own navigation, set `council.pages.show_nav` (env
+`COUNCIL_PAGES_SHOW_NAV`, default `true`) to `false` to leave that row out.
+
 **The published pages are a copy.** A package upgrade does not change them, so
 after every `composer update` that moves change-council, check them:
 

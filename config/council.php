@@ -168,5 +168,8 @@ return [
         // Where `vendor:publish --tag=council-pages` copies the TSX. Prism's
         // lab globs ./pages/**, fancy-labs globs ./Pages/**.
         'publish_path' => 'js/Pages/Council',
+        // Each page draws its own Changes/Members row. A host that renders the
+        // pages inside its own navigation (fancy-labs does) sets this to false.
+        'show_nav' => (bool) env('COUNCIL_PAGES_SHOW_NAV', true),
     ],
 ];
