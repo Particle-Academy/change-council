@@ -238,7 +238,11 @@ export function setStepUpHandler(handler: StepUpHandler | null): void {
 export function refusal(answer: Answer<unknown>): string {
     const error = answer.json.error;
     const code = error?.code ?? `http_${answer.status}`;
-    if (code === 'step_up_required') return 'Refused: this owner action needs a step-up confirmation, and none was given.';
+    if (code === 'step_up_required') {
+        // A host may say what to do (enrol a passkey first, say) in its challenge.
+        const hint = (error?.step_up as { message?: unknown } | undefined)?.message;
+        return `Refused: this owner action needs a step-up confirmation, and none was given.${typeof hint === 'string' && hint !== '' ? ` ${hint}` : ''}`;
+    }
     if (code === 'step_up_failed') return `Refused: the step-up confirmation was not accepted (${String(error?.reason ?? 'unknown')}).`;
 
     return `Refused: ${code}`;
