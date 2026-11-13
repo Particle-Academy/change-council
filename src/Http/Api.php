@@ -11,9 +11,14 @@ use ChangeCouncil\Ledger\States;
 use ChangeCouncil\Members\Members;
 use ChangeCouncil\Models\Change;
 use ChangeCouncil\Models\Consumer;
+use ChangeCouncil\StepUp\NoStepUp;
+use ChangeCouncil\StepUp\OwnerAction;
+use ChangeCouncil\StepUp\StepUp;
+use ChangeCouncil\StepUp\StepUpRefused;
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use InvalidArgumentException;
 
 /**
  * The transport contract without a framework (charlotte's shape): each method
@@ -22,10 +27,14 @@ use Illuminate\Database\Eloquent\Model;
  * authorization hook for the ability. Owner actions record `owner:<identity>`,
  * where the identity is the principal's email when it has one, else its key,
  * unless the host maps it with `Council::resolveActorUsing()` ({@see ActorResolver}).
+ *
+ * Owner actions then pass the step-up gate ({@see StepUp}, bound with
+ * `Council::requireStepUpUsing()`): body validation, the actor, the gate, the
+ * ledger. The body's reserved `step_up` key is split off before validation.
  */
 final class Api
 {
-    public function __construct(private readonly Ledger $ledger, private readonly Presenter $presenter, private readonly Feed $feed, private readonly Authorizer $authorizer, private readonly ?Members $members = null, private readonly ?ActorResolver $actors = null) {}
+    public function __construct(private readonly Ledger $ledger, private readonly Presenter $presenter, private readonly Feed $feed, private readonly Authorizer $authorizer, private readonly ?Members $members = null, private readonly ?ActorResolver $actors = null, private readonly ?StepUp $stepUp = null) {}
 
     private function members(): Members
     {
@@ -55,11 +64,12 @@ final class Api
      */
     public function removeMember(mixed $principal, string $address, ?array $body): ApiResponse
     {
+        [$body, $proof] = self::takeStepUp($body);
         if (is_array($body) && array_key_exists('reason', $body) && $body['reason'] !== null && ! is_string($body['reason'])) {
             $body = null;
         }
 
-        return $this->memberAction($principal, $address, $body, [], ['reason'], fn (array $b, string $owner) => $this->ledger->removeMember($address, $owner, $b['reason'] ?? null));
+        return $this->memberAction($principal, $address, $body, $proof, OwnerAction::MEMBER_REMOVE, [], ['reason'], fn (array $b, string $owner) => $this->ledger->removeMember($address, $owner, $b['reason'] ?? null));
     }
 
     /** GET /members/{address}: the profile and the voting record, newest first. */
@@ -79,35 +89,49 @@ final class Api
     /** PUT /members/{address}/weight {weight} */
     public function memberWeight(mixed $principal, string $address, ?array $body): ApiResponse
     {
-        return $this->memberAction($principal, $address, $body, ['weight'], [], fn (array $b, string $owner) => $this->ledger->setWeight($address, $b['weight'], $owner));
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->memberAction($principal, $address, $body, $proof, OwnerAction::MEMBER_WEIGHT, ['weight'], [], fn (array $b, string $owner) => $this->ledger->setWeight($address, $b['weight'], $owner));
     }
 
     /** PUT /members/{address}/project {project_name?, project_description?, project_url?} */
     public function memberProject(mixed $principal, string $address, ?array $body): ApiResponse
     {
-        return $this->memberAction($principal, $address, $body, [], Consumer::PROJECT_FIELDS, fn (array $b, string $owner) => $this->ledger->setProject($address, $b, $owner));
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->memberAction($principal, $address, $body, $proof, OwnerAction::MEMBER_PROJECT, [], Consumer::PROJECT_FIELDS, fn (array $b, string $owner) => $this->ledger->setProject($address, $b, $owner));
     }
 
     /** PUT /settings/blocking-threshold {threshold} */
     public function blockingThreshold(mixed $principal, ?array $body): ApiResponse
     {
-        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => null], function () use ($principal, $body): ApiResponse {
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => null], function () use ($principal, $body, $proof): ApiResponse {
             if (! self::closed($body, ['threshold'])) {
                 return self::error(422, 'invalid_request');
             }
-            $this->ledger->setBlockingThreshold($body['threshold'], $this->actor($principal));
+            $owner = $this->actor($principal);
+            $stopped = $this->stepUpGate($principal, null, $owner, new OwnerAction(OwnerAction::BLOCKING_THRESHOLD, null, null, $body), $proof, fn () => $this->ledger->setBlockingThreshold($body['threshold'], $owner));
+            if ($stopped instanceof ApiResponse) {
+                return $stopped;
+            }
 
             return new ApiResponse(200, ['blocking_threshold' => $this->ledger->threshold()]);
         });
     }
 
-    private function memberAction(mixed $principal, string $address, ?array $body, array $required, array $optional, Closure $action): ApiResponse
+    private function memberAction(mixed $principal, string $address, ?array $body, ?array $proof, string $name, array $required, array $optional, Closure $action): ApiResponse
     {
-        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => $address], function () use ($principal, $address, $body, $required, $optional, $action): ApiResponse {
+        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => $address], function () use ($principal, $address, $body, $proof, $name, $required, $optional, $action): ApiResponse {
             if (! self::closed($body, $required, $optional)) {
                 return self::error(422, 'invalid_request');
             }
-            $action($body, $this->actor($principal));
+            $owner = $this->actor($principal);
+            $stopped = $this->stepUpGate($principal, null, $owner, new OwnerAction($name, null, $address, $body), $proof, fn () => $action($body, $owner));
+            if ($stopped instanceof ApiResponse) {
+                return $stopped;
+            }
             $consumer = $this->members()->find($address) ?? throw new Refused('not_found');
 
             return new ApiResponse(200, ['member' => $this->members()->profile($consumer)]);
@@ -163,40 +187,50 @@ final class Api
     /** POST /changes/{ref}/owner/approve-initiation {note?} */
     public function approveInitiation(mixed $principal, string $ref, ?array $body): ApiResponse
     {
-        return $this->ownerAction($principal, $ref, $body, [], ['note'], fn (Change $c, array $b, string $owner) => $this->ledger->approveInitiation($c, $owner, is_string($b['note'] ?? null) ? $b['note'] : null));
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->ownerAction($principal, $ref, $body, $proof, OwnerAction::APPROVE_INITIATION, [], ['note'], fn (Change $c, array $b, string $owner) => $this->ledger->approveInitiation($c, $owner, is_string($b['note'] ?? null) ? $b['note'] : null));
     }
 
     /** POST /changes/{ref}/owner/reject-initiation {reason} */
     public function rejectInitiation(mixed $principal, string $ref, ?array $body): ApiResponse
     {
-        return $this->ownerAction($principal, $ref, $body, ['reason'], [], fn (Change $c, array $b, string $owner) => $this->ledger->rejectInitiation($c, $owner, (string) $b['reason']));
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->ownerAction($principal, $ref, $body, $proof, OwnerAction::REJECT_INITIATION, ['reason'], [], fn (Change $c, array $b, string $owner) => $this->ledger->rejectInitiation($c, $owner, (string) $b['reason']));
     }
 
     /** POST /changes/{ref}/owner/override {decision, reason, acknowledge[]} */
     public function override(mixed $principal, string $ref, ?array $body): ApiResponse
     {
+        [$body, $proof] = self::takeStepUp($body);
         if (is_array($body) && (! in_array($body['decision'] ?? null, ['approve', 'reject'], true) || ! is_array($body['acknowledge'] ?? []))) {
             $body = null;
         }
 
-        return $this->ownerAction($principal, $ref, $body, ['decision', 'reason'], ['acknowledge'], fn (Change $c, array $b, string $owner) => $this->ledger->override($c, $owner, $b['decision'], (string) $b['reason'], array_values(array_filter((array) ($b['acknowledge'] ?? []), 'is_int'))));
+        return $this->ownerAction($principal, $ref, $body, $proof, OwnerAction::OVERRIDE, ['decision', 'reason'], ['acknowledge'], fn (Change $c, array $b, string $owner) => $this->ledger->override($c, $owner, $b['decision'], (string) $b['reason'], array_values(array_filter((array) ($b['acknowledge'] ?? []), 'is_int'))));
     }
 
     /** POST /changes/{ref}/owner/revoke {reason} */
     public function revoke(mixed $principal, string $ref, ?array $body): ApiResponse
     {
-        return $this->ownerAction($principal, $ref, $body, ['reason'], [], fn (Change $c, array $b, string $owner) => $this->ledger->revoke($c, $owner, (string) $b['reason']));
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->ownerAction($principal, $ref, $body, $proof, OwnerAction::REVOKE, ['reason'], [], fn (Change $c, array $b, string $owner) => $this->ledger->revoke($c, $owner, (string) $b['reason']));
     }
 
     /** PUT /changes/{ref}/silence-policy {address, policy|null} */
     public function changeSilencePolicy(mixed $principal, string $ref, ?array $body): ApiResponse
     {
-        return $this->ownerAction($principal, $ref, $body, ['address', 'policy'], [], fn (Change $c, array $b, string $owner) => $this->ledger->setChangeSilencePolicy($c, (string) $b['address'], is_string($b['policy']) ? $b['policy'] : null, $owner));
+        [$body, $proof] = self::takeStepUp($body);
+
+        return $this->ownerAction($principal, $ref, $body, $proof, OwnerAction::CHANGE_SILENCE_POLICY, ['address', 'policy'], [], fn (Change $c, array $b, string $owner) => $this->ledger->setChangeSilencePolicy($c, (string) $b['address'], is_string($b['policy']) ? $b['policy'] : null, $owner));
     }
 
     /** PUT /consumers/{address}/silence-policy {policy} */
     public function consumerSilencePolicy(mixed $principal, string $address, ?array $body): ApiResponse
     {
+        [$body, $proof] = self::takeStepUp($body);
         if (($refused = $this->principal($principal)) !== null) {
             return $refused;
         }
@@ -207,21 +241,90 @@ final class Api
             return self::error(422, 'invalid_request');
         }
 
-        return $this->guard(fn () => new ApiResponse(200, ['consumer' => Presenter::consumer($this->ledger->setSilencePolicy($address, $body['policy'], $this->actor($principal)))]));
+        return $this->guard(function () use ($principal, $address, $body, $proof): ApiResponse {
+            $owner = $this->actor($principal);
+            $consumer = $this->stepUpGate($principal, null, $owner, new OwnerAction(OwnerAction::CONSUMER_SILENCE_POLICY, null, $address, $body), $proof, fn () => $this->ledger->setSilencePolicy($address, $body['policy'], $owner));
+
+            return $consumer instanceof ApiResponse ? $consumer : new ApiResponse(200, ['consumer' => Presenter::consumer($consumer)]);
+        });
     }
 
     // ------------------------------------------------------------------
 
-    private function ownerAction(mixed $principal, string $ref, ?array $body, array $required, array $optional, Closure $action): ApiResponse
+    private function ownerAction(mixed $principal, string $ref, ?array $body, ?array $proof, string $name, array $required, array $optional, Closure $action): ApiResponse
     {
-        return $this->withChange($principal, $ref, 'owner', function (Change $change) use ($principal, $body, $required, $optional, $action): ApiResponse {
+        return $this->withChange($principal, $ref, 'owner', function (Change $change) use ($principal, $body, $proof, $name, $required, $optional, $action): ApiResponse {
             if (! self::closed($body, $required, $optional)) {
                 return self::error(422, 'invalid_request');
             }
-            $updated = $action($change, $body, $this->actor($principal));
+            $owner = $this->actor($principal);
+            $updated = $this->stepUpGate($principal, $change, $owner, new OwnerAction($name, $change->ref, null, $body), $proof, fn () => $action($change, $body, $owner));
+            if ($updated instanceof ApiResponse) {
+                return $updated;
+            }
 
             return new ApiResponse(200, ['change' => $this->presenter->detail($updated)['change']]);
         });
+    }
+
+    /**
+     * Splits the reserved `step_up` key off a body: [the body without it, the
+     * proof or null]. A `step_up` that is neither an object nor null makes the
+     * whole body invalid (null), which validation then answers with 422, so the
+     * strict key sets of every endpoint stay as they were.
+     *
+     * @return array{0: ?array, 1: ?array}
+     */
+    private static function takeStepUp(?array $body): array
+    {
+        if ($body === null || ! array_key_exists('step_up', $body)) {
+            return [$body, null];
+        }
+        $proof = $body['step_up'];
+        unset($body['step_up']);
+        if ($proof !== null && ! is_array($proof)) {
+            return [null, null];
+        }
+
+        return [$body, $proof];
+    }
+
+    /**
+     * The step-up gate, run after validation and the actor, before the ledger.
+     * Returns an ApiResponse when the gate stops the action (428 no proof, 403
+     * refused), else whatever `$run` returned. With a verified proof the
+     * `owner.step_up` event and the action share one transaction
+     * ({@see Ledger::withStepUp()}).
+     */
+    private function stepUpGate(mixed $principal, ?Change $change, string $owner, OwnerAction $action, ?array $proof, Closure $run): mixed
+    {
+        $stepUp = $this->stepUp ?? new NoStepUp;
+        if (! $stepUp->required($principal, $action)) {
+            return $run();
+        }
+        try {
+            $digest = $action->digest();
+        } catch (InvalidArgumentException) {
+            // Params that have no canonical form (a float) cannot be bound to a proof.
+            return self::error(422, 'invalid_request');
+        }
+        if ($proof === null) {
+            $challenge = $stepUp->challenge($principal, $action);
+
+            return self::error(428, 'step_up_required', [
+                'step_up' => $challenge === [] ? new \stdClass : $challenge,
+                'action' => [...$action->toArray(), 'params' => $action->params === [] ? new \stdClass : $action->params, 'digest' => $digest],
+            ]);
+        }
+        try {
+            $evidence = $stepUp->verify($principal, $action, $proof);
+        } catch (StepUpRefused $e) {
+            $this->ledger->stepUpRefused($change, $owner, $action, $e->reason, $e->evidence);
+
+            return self::error(403, 'step_up_failed', ['reason' => $e->reason]);
+        }
+
+        return $this->ledger->withStepUp($change, $owner, $action, $evidence, $run);
     }
 
     private function withChange(mixed $principal, string $ref, string $ability, Closure $action): ApiResponse

@@ -17,6 +17,8 @@ use ChangeCouncil\Feed\LaravelHttpSender;
 use ChangeCouncil\Feed\WebhookEmitter;
 use ChangeCouncil\Http\ActorResolver;
 use ChangeCouncil\Http\Api;
+use ChangeCouncil\StepUp\NoStepUp;
+use ChangeCouncil\StepUp\StepUp;
 use ChangeCouncil\Http\Authorizer;
 use ChangeCouncil\Http\DenyAll;
 use ChangeCouncil\Http\Presenter;
@@ -68,6 +70,9 @@ final class CouncilServiceProvider extends ServiceProvider
         $this->app->singleton(AuditLog::class, fn (Application $app) => new AuditLog($app['db']->connection()));
         $this->app->singletonIf(PetitionTransport::class, fn () => new ClerkQueueTransport);
         $this->app->singletonIf(Authorizer::class, fn () => new DenyAll);
+        // No owner action needs a step-up until the host binds one with
+        // Council::requireStepUpUsing().
+        $this->app->singletonIf(StepUp::class, fn () => new NoStepUp);
         $this->app->singletonIf(PageRenderer::class, fn () => new InertiaPageRenderer);
         // Nothing by default. `council.notify.genie` (or Council::notifyGenie())
         // opts into Genie's app inbox; Council::notifyUsing() binds anything else.
@@ -117,7 +122,7 @@ final class CouncilServiceProvider extends ServiceProvider
         $this->app->bind(Feed::class, fn (Application $app) => new Feed((string) $app['config']->get('council.origin', 'fancy')));
         $this->app->bind(Presenter::class, fn (Application $app) => new Presenter($app->make(Ledger::class)));
         $this->app->bind(Members::class, fn (Application $app) => new Members($app->make(Ledger::class)));
-        $this->app->bind(Api::class, fn (Application $app) => new Api($app->make(Ledger::class), $app->make(Presenter::class), $app->make(Feed::class), $app->make(Authorizer::class), $app->make(Members::class), $app->bound(ActorResolver::class) ? $app->make(ActorResolver::class) : null));
+        $this->app->bind(Api::class, fn (Application $app) => new Api($app->make(Ledger::class), $app->make(Presenter::class), $app->make(Feed::class), $app->make(Authorizer::class), $app->make(Members::class), $app->bound(ActorResolver::class) ? $app->make(ActorResolver::class) : null, $app->make(StepUp::class)));
         $this->app->bind(Detector::class, fn (Application $app) => new Detector(
             (string) $app['config']->get('council.detector.node', 'node'),
             $app['config']->get('council.detector.script'),

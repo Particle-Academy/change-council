@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Heading, Input, NumberField, Select, StatList, Table, Text, Textarea } from '@particle-academy/react-fancy';
 import { useState } from 'react';
-import { type HostLink, type MemberDetail, type MemberRow, type RecordRow, send, usePoll } from './parts/api';
+import { type HostLink, type MemberDetail, type MemberRow, type RecordRow, send, refusal, usePoll } from './parts/api';
 import { navVariant, safeUrl } from './parts/nav';
 import { censusRequestLabel, label, POLICIES, severityTone, sourceTone, verdictTone } from './parts/tone';
 
@@ -328,7 +328,7 @@ function OwnerControls({
         const answer = await send<{ member?: MemberRow; consumer?: unknown }>(method, path, body);
         setBusy(null);
         if (!answer.ok) {
-            onRefused(`Refused: ${answer.json.error?.code ?? answer.status}`);
+            onRefused(refusal(answer));
             return false;
         }
         if (answer.json.member) onSaved(answer.json.member, done);

@@ -16,6 +16,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **A step-up hook for owner actions.** `Council::requireStepUpUsing(StepUp)`
+  lets a host require a fresh proof (a passkey, a TOTP, anything) before any of
+  the ten owner endpoints runs. Without a proof the API answers 428
+  `step_up_required` with the host's challenge and the action's digest; a
+  refused proof is 403 `step_up_failed` and is audited as
+  `owner.step_up_refused`; a verified one is audited as `owner.step_up` in the
+  same transaction as the action. The proof is bound to
+  `OwnerAction::digest()` (action, ref, address and params). New:
+  `ChangeCouncil\StepUp\{StepUp, OwnerAction, StepUpRefused, NoStepUp}`. The
+  pages' `send()` hands a 428 to a handler set with `setStepUpHandler()` and
+  re-sends once, and every page words the step-up refusals (`refusal()`).
+  Nothing to do: the default is `NoStepUp`, which changes nothing, and the body
+  key `step_up` is reserved. Re-publish the pages
+  (`vendor:publish --tag=council-pages --force`) to get the handler.
+
 ## [0.7.2] - 2026-11-12
 
 **Consumer action:** after upgrading, run

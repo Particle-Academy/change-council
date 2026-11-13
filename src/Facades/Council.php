@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static void authorizeUsing(\Closure $callback)
  * @method static void authorizeOwners()
  * @method static void resolveActorUsing(callable $resolver)
+ * @method static void requireStepUpUsing(\ChangeCouncil\StepUp\StepUp $stepUp)
  * @method static void notifyUsing(\ChangeCouncil\Notify\OwnerEventNotifier|\Closure $notifier)
  * @method static void notifyGenie()
  * @method static array notifierStatus()

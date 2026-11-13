@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Heading, Input, Select, StatList, Table, Text } from '@particle-academy/react-fancy';
 import { useMemo, useState } from 'react';
-import { type ConsumerRow, type HostLink, send, type Summary, usePoll } from './parts/api';
+import { type ConsumerRow, type HostLink, send, refusal, type Summary, usePoll } from './parts/api';
 import { navVariant } from './parts/nav';
 import { label, POLICIES, STATES, stateTone } from './parts/tone';
 
@@ -34,7 +34,7 @@ export default function Index({ changes: initial, consumers: initialConsumers, f
         if (answer.ok) {
             setConsumers((rows) => rows.map((row) => (row.address === address ? answer.json.consumer : row)));
         }
-        setMessage(answer.ok ? `Silence policy for ${address} saved.` : `Refused: ${answer.json.error?.code ?? answer.status}`);
+        setMessage(answer.ok ? `Silence policy for ${address} saved.` : refusal(answer));
     };
 
     const query = new URLSearchParams({ ...(state ? { state } : {}), ...(pkg ? { package: pkg } : {}), ...(cls ? { class: cls } : {}) }).toString();

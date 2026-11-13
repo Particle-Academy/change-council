@@ -68,3 +68,16 @@ test('the README documents resolveActorUsing and its refusal', function (): void
         ->and($readme)->toContain('191 characters')
         ->and($readme)->toContain('invalid_actor');
 });
+
+test('the README documents the step-up hook, its status codes, its audit events and the page handler', function (): void {
+    $readme = docSources()['README.md'];
+
+    expect($readme)->toContain('Council::requireStepUpUsing(')
+        ->and($readme)->toContain('NoStepUp')
+        ->and($readme)->toContain('428')
+        ->and($readme)->toContain('step_up_required')
+        ->and($readme)->toContain('step_up_failed')
+        ->and($readme)->toContain('owner.step_up_refused')
+        ->and($readme)->toContain('setStepUpHandler(')
+        ->and(docSources()['Council.php'])->toContain('function requireStepUpUsing(');
+});

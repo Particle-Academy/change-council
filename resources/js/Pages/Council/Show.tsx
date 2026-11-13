@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Checkbox, CodeView, Heading, Modal, Select, Table, Tabs, Text, Textarea, Timeline } from '@particle-academy/react-fancy';
 import { useState } from 'react';
-import { type Detail, type Finding, type HostLink, type PetitionRow, type Policy, type RoundRow, send, usePoll, type Vote } from './parts/api';
+import { type Detail, type Finding, type HostLink, type PetitionRow, type Policy, type RoundRow, send, refusal, usePoll, type Vote } from './parts/api';
 import { navVariant } from './parts/nav';
 import { label, POLICIES, severityTone, stateTone, verdictTone } from './parts/tone';
 
@@ -38,7 +38,7 @@ export default function Show({ detail: initial, pollMs, host, endpoints }: Props
             scope === 'consumer'
                 ? await send('PUT', `${endpoints.consumers}/${encodeURIComponent(address)}/silence-policy`, { policy })
                 : await send('PUT', endpoints.changeSilencePolicy, { address, policy: policy === '' ? null : policy });
-        setMessage(answer.ok ? `Silence policy for ${address} saved.` : `Refused: ${answer.json.error?.code ?? answer.status}`);
+        setMessage(answer.ok ? `Silence policy for ${address} saved.` : refusal(answer));
         await refresh();
     };
 
@@ -579,7 +579,7 @@ function OwnerModal({ action, detail, endpoint, onClose, onDone }: { action: Act
         const answer = await send('POST', `${endpoint}/${PATHS[action]}`, body);
         setBusy(false);
         if (!answer.ok) {
-            setError(answer.json.error?.code ?? `http_${answer.status}`);
+            setError(refusal(answer));
             return;
         }
         setReason('');
@@ -616,7 +616,7 @@ function OwnerModal({ action, detail, endpoint, onClose, onDone }: { action: Act
                         ))}
                     </div>
                 )}
-                {error && <Callout color="red">Refused: {error}</Callout>}
+                {error && <Callout color="red">{error}</Callout>}
             </Modal.Body>
             <Modal.Footer>
                 <div className="flex justify-end gap-2">

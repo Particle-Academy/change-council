@@ -80,6 +80,50 @@ control characters or newlines. A bad answer refuses the owner action with
 `invalid_actor` (HTTP 500) and records nothing; it never falls back to the
 email, because the audit log is append-only.
 
+### Step-up before owner actions (optional)
+
+A host can require a fresh proof (a passkey ceremony, a TOTP, a second device)
+before any OWNER action runs: approve or reject an initiation, override,
+revoke, the silence policies, a member's weight or project, removing a member,
+and the blocking threshold. The council does not know what the proof is; it
+calls the host's `ChangeCouncil\StepUp\StepUp`:
+
+```php
+Council::requireStepUpUsing(new MyPasskeyStepUp);   // default: NoStepUp
+```
+
+```php
+interface StepUp {
+    public function required(mixed $principal, OwnerAction $action): bool;
+    public function challenge(mixed $principal, OwnerAction $action): array;   // for the client
+    public function verify(mixed $principal, OwnerAction $action, array $proof): array; // evidence, or throw StepUpRefused
+}
+```
+
+`OwnerAction` is `{action, ref, address, params}` (params = the validated body)
+and `digest()` is `sha256:` of its canonical JSON, so a proof bound to it cannot
+approve another Change, another member, or the same action with other params.
+
+The proof travels in the body's reserved `step_up` key. After authorization and
+body validation:
+
+| Request | Answer | Audit log |
+|---|---|---|
+| no `step_up` | **428** `{"error": {"code": "step_up_required", "step_up": <challenge>, "action": {action, ref, address, params, digest}}}` | nothing |
+| a refused proof | **403** `{"error": {"code": "step_up_failed", "reason": "<code>"}}` | `owner.step_up_refused` `{action, ref, address, digest, reason, evidence}` |
+| a verified proof | the action's usual answer | `owner.step_up` `{action, ref, address, digest, evidence}`, then the action's own events, in one transaction |
+
+A step-up whose action the ledger then refuses rolls back with it. The default,
+`NoStepUp`, requires nothing, and a `step_up` key is then ignored.
+
+The pages answer a 428 through a handler the host sets once in its browser
+entry; the request is re-sent once with the proof:
+
+```ts
+import { setStepUpHandler } from './Pages/Council/parts/api';
+setStepUpHandler(async (challenge, action) => ({ /* the proof */ }));
+```
+
 Optional, and off by default: `Council::notifyGenie()` (or
 `COUNCIL_NOTIFY_GENIE=true`) sends owner events to Genie's app inbox after
 commit. These are a proposal awaiting the owner, initiation approved or

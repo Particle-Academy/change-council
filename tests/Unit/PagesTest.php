@@ -222,3 +222,31 @@ test('every interactive element carries a stable handle', function (): void {
         }
     }
 });
+
+/*
+ * A host that requires step-up answers an owner action with 428. The pages
+ * hand that to a host-set handler and retry ONCE with the proof; with no
+ * handler (or a handler that gives up) the 428 comes back as it is, and every
+ * page says in words what happened instead of printing the code.
+ */
+test('send() retries a step_up_required answer once through the host\'s handler, and never throws', function (): void {
+    $api = pageSources()['api.ts'];
+
+    expect($api)->toContain('export type StepUpAction')
+        ->and($api)->toContain('export type StepUpHandler')
+        ->and($api)->toContain('export function setStepUpHandler(handler: StepUpHandler | null): void')
+        ->and($api)->toContain('428')
+        ->and($api)->toContain("'step_up_required'")
+        ->and($api)->toContain('step_up: proof');
+});
+
+test('every page that sends an owner action words the step-up refusals', function (): void {
+    $api = pageSources()['api.ts'];
+
+    expect($api)->toContain('export function refusal(')
+        ->and($api)->toContain('step_up_failed');
+    foreach (['Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx'] as $name) {
+        expect(pageSources()[$name])->toMatch('/refusal\(/', $name)
+            ->and(pageSources()[$name])->not->toMatch('/Refused: \$\{answer\.json\.error/', $name);
+    }
+});

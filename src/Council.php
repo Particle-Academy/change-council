@@ -17,6 +17,9 @@ use ChangeCouncil\Notify\NullNotifier;
 use ChangeCouncil\Notify\OwnerEvent;
 use ChangeCouncil\Notify\OwnerEventNotifier;
 use ChangeCouncil\Petitions\Ingest;
+use ChangeCouncil\StepUp\NoStepUp;
+use ChangeCouncil\StepUp\OwnerAction;
+use ChangeCouncil\StepUp\StepUp;
 use Closure;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Container\Container;
@@ -92,6 +95,27 @@ final class Council
     public function resolveActorUsing(callable $resolver): void
     {
         $this->container->instance(ActorResolver::class, new ActorResolver(Closure::fromCallable($resolver)));
+    }
+
+    /**
+     * Require a step-up proof before OWNER actions (approve, reject, override,
+     * revoke, silence policies, weights, projects, member removal, the blocking
+     * threshold). The council does not know what the proof is: a passkey
+     * ceremony, a TOTP, a second device. Without this, {@see NoStepUp} is bound
+     * and nothing changes.
+     *
+     *     Council::requireStepUpUsing(new MyPasskeyStepUp);
+     *
+     * The hook's `required()` decides per action; with no proof the API answers
+     * 428 `step_up_required` with its `challenge()`; a proof goes to `verify()`,
+     * bound to {@see OwnerAction::digest()}. A refusal is audited as
+     * `owner.step_up_refused` and answered 403 `step_up_failed`; the evidence of
+     * a verified proof is audited as `owner.step_up` in the same transaction as
+     * the action.
+     */
+    public function requireStepUpUsing(StepUp $stepUp): void
+    {
+        $this->container->instance(StepUp::class, $stepUp);
     }
 
     /**

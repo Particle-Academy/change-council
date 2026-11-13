@@ -17,7 +17,9 @@ use ChangeCouncil\Notify\OwnerEvent;
 use ChangeCouncil\Notify\OwnerEventNotifier;
 use ChangeCouncil\Petitions\DeliveryResult;
 use ChangeCouncil\Petitions\PetitionText;
+use ChangeCouncil\StepUp\OwnerAction;
 use ChangeCouncil\Transport\PetitionTransport;
+use Closure;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Carbon;
 
@@ -725,6 +727,40 @@ final class Ledger
             $change->forceFill(['late_conflict' => true])->save();
             $this->audit->append($change->id, 'ledger', 'vote.late_conflict', ['petition' => $petition->id, 'vote' => $vote->id, 'severity' => $vote->worstSeverity()]);
         }
+    }
+
+    /**
+     * A verified step-up and the owner action it was for, in ONE transaction:
+     * `owner.step_up` is appended, then `$then` runs the owner method. If the
+     * action is refused (invalid_state, not_found, ...) the step-up event rolls
+     * back with it, so the log never shows a step-up for an action that did not
+     * happen. Called only from `Http\Api`, after `StepUp::verify()`.
+     *
+     * @template T
+     *
+     * @param  array<string, mixed>  $evidence  what the host's verify() returned
+     * @param  Closure(): T  $then
+     * @return T
+     */
+    public function withStepUp(?Change $change, string $owner, OwnerAction $action, array $evidence, Closure $then): mixed
+    {
+        return $this->db->transaction(function () use ($change, $owner, $action, $evidence, $then): mixed {
+            $this->audit->append($change?->id, self::owner($owner), 'owner.step_up', [
+                'action' => $action->action, 'ref' => $action->ref, 'address' => $action->address,
+                'digest' => $action->digest(), 'evidence' => $evidence,
+            ]);
+
+            return $then();
+        });
+    }
+
+    /** A step-up proof the host refused, audited; the action does not run. */
+    public function stepUpRefused(?Change $change, string $owner, OwnerAction $action, string $reason, array $evidence): void
+    {
+        $this->audit->append($change?->id, self::owner($owner), 'owner.step_up_refused', [
+            'action' => $action->action, 'ref' => $action->ref, 'address' => $action->address,
+            'digest' => $action->digest(), 'reason' => $reason, 'evidence' => $evidence,
+        ]);
     }
 
     public function audit(): AuditLog

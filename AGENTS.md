@@ -107,6 +107,15 @@ Two halves in one repo:
   A bad answer (non-string, blank, over 191 characters, invalid UTF-8, any C0/C1
   control or DEL) throws `Refused('invalid_actor')`, mapped to 500, BEFORE the
   ledger is called. Never fall back to the email.
+- Step-up (`StepUp\StepUp`, `Council::requireStepUpUsing()`, default
+  `NoStepUp`): every owner endpoint in `Http\Api` runs principal, Change,
+  authorizer, body validation (the reserved `step_up` key split off first),
+  actor, THEN `stepUpGate()`, then the ledger. No proof: 428 with the host's
+  challenge, nothing written. Refused: 403 plus `owner.step_up_refused`
+  (`Ledger::stepUpRefused()`). Verified: `Ledger::withStepUp()` appends
+  `owner.step_up` and runs the owner method in ONE transaction. A new owner
+  endpoint must go through the gate (the `owner endpoints` dataset in
+  `StepUpTest` lists them).
 - `Models\AuditEvent` throws on update/delete; the migration adds SQLite
   triggers. `AuditLog::verify()` reads raw rows, not models.
 - `Feed\Feed` never emits reply free text (it masks `note`/`reason`).

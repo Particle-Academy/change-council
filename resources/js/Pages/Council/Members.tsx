@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { Badge, Button, Callout, Card, Heading, NumberField, StatList, Table, Text } from '@particle-academy/react-fancy';
 import { useMemo, useState } from 'react';
-import { type HostLink, type MemberRow, send, type Threshold, usePoll } from './parts/api';
+import { type HostLink, type MemberRow, send, refusal, type Threshold, usePoll } from './parts/api';
 import { compare, navVariant, nextSort, type Sort } from './parts/nav';
 import { censusRequestLabel, label, sourceTone } from './parts/tone';
 
@@ -78,7 +78,7 @@ export default function Members({ members: initial, blocking_threshold, former_m
         if (answer.ok) {
             setData({ ...data, blocking_threshold: answer.json.blocking_threshold });
         }
-        setMessage(answer.ok ? `Blocking threshold set to ${answer.json.blocking_threshold.value}.` : `Refused: ${answer.json.error?.code ?? answer.status}`);
+        setMessage(answer.ok ? `Blocking threshold set to ${answer.json.blocking_threshold.value}.` : refusal(answer));
     };
 
     const totalWeight = data.members.filter((m) => !m.internal).reduce((n, m) => n + m.weight, 0);
