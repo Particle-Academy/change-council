@@ -16,6 +16,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-13
+
+**Consumer action:** re-publish the pages
+(`php artisan vendor:publish --tag=council-pages --force`); `council:pages-check`
+reports the old copy as stale until you do. No migration. Both additions are
+off by default and change nothing until you opt in.
+
 ### Added
 
 - **A step-up hook for owner actions.** `Council::requireStepUpUsing(StepUp)`
