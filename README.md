@@ -21,6 +21,13 @@ Two halves, one repo:
 > written and verified but not required. The gate is Phase 3. Breaking changes
 > land in minor releases; read the [CHANGELOG](CHANGELOG.md).
 
+<!-- fancy-agents-note:start -->
+> **For agents.** Every Fancy package, this one included, is listed on the
+> Fancy MCP catalog server at `https://ui.particle.academy/mcp` (streamable HTTP, no API key;
+> MCP id `fancy-ui`), with install commands and docs. How an agent installs
+> and uses this package is in [AGENTS.md](https://github.com/Particle-Academy/change-council/blob/main/AGENTS.md).
+<!-- fancy-agents-note:end -->
+
 ## The rules it encodes
 
 - **Silence is not consent.** A required voter's silence escalates to the owner,
