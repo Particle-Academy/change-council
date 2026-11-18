@@ -20,6 +20,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Docs:** `AGENTS.md` is now the guide to using this package (install, its entries on the Fancy MCP catalog server, API essentials, traps). The contributor notes it held moved to `CONTRIBUTING.md`, and `CLAUDE.md` is now a symlink to it. The README points to the MCP server and to `AGENTS.md`. No code changed; nothing to do.
 
+### Fixed
+
+- **Canonical JSON no longer turns an object into a list.** `Support\CanonicalJson` encoded a `stdClass` whose keys were `0..n-1` (`{"0":"a"}` decoded with `json_decode($json)`) as the list `["a"]`. It did the same to a PHP array whose keys were `0..n-1` out of order (`[1 => 'b', 0 => 'a']`), and it encoded every `ArrayObject` as `{}` whatever it held. Two different JSON documents therefore signed and hashed to the same bytes, and the PHP form disagreed with `council/lib/record.mjs`. The rule is now explicit and in the class docblock: a `stdClass` or `ArrayObject` is always a JSON object; a PHP array is a list exactly when `array_is_list()`, otherwise an object with its keys sorted as strings. New shared vectors (`tests/fixtures/canonical-vectors.json`) run in both the Pest and the Node suites.
+
+  **What you must do: nothing.** Every shape this package signs or hashes (`change-council/decision.v1`, the audit chain, the owner-action digest) uses string keys for its objects and `stdClass` only when empty, so none of their bytes change: existing decision records verify, `council:verify-log` passes on an existing ledger, and step-up digests are the same. This was checked against a live ledger (627 audit events, every stored hash recomputed identically before and after). Only if your own code passes `CanonicalJson::encode()` a non-empty `stdClass` with integer-like keys, an `ArrayObject`, or a reordered integer-keyed array does its output change, and in each case the new output is the correct one.
+
 ## [0.8.0] - 2026-11-13
 
 **Consumer action:** re-publish the pages

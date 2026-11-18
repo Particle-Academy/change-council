@@ -38,6 +38,9 @@ Two halves in one repo:
 - `lib/record.mjs` must stay byte-compatible with `src/Support/CanonicalJson.php`.
   The shared fixture `tests/fixtures/decision-record.json` is verified by both
   suites; regenerate it with `php tests/fixtures/make-decision-fixture.php`.
+  `tests/fixtures/canonical-vectors.json` holds the object-versus-list cases
+  (`{"0":"a"}` stays an object; see the rule in `CanonicalJson`'s docblock).
+  Add a vector there, not in one suite only.
 
 ## The ledger
 

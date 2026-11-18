@@ -38,3 +38,12 @@ test('canonical JSON sorts keys, keeps list order and refuses floats', () => {
     assert.equal(canonical({ b: 1, a: { y: 'é/', x: [3, 1] } }), '{"a":{"x":[3,1],"y":"é/"},"b":1}');
     assert.throws(() => canonical({ n: 1.5 }));
 });
+
+// The same vectors as tests/Unit/CanonicalJsonTest.php: an object stays an
+// object whatever its keys look like, so `{"0":"a"}` never signs as `["a"]`.
+const vectors = JSON.parse(readFileSync(join(fixtures, 'canonical-vectors.json'), 'utf8')).vectors;
+for (const { name, input, canonical: expected } of vectors) {
+    test(`canonical JSON parity vector: ${name}`, () => {
+        assert.equal(canonical(JSON.parse(input)), expected);
+    });
+}
