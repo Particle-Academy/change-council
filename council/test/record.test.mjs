@@ -42,8 +42,21 @@ test('canonical JSON sorts keys, keeps list order and refuses floats', () => {
 // The same vectors as tests/Unit/CanonicalJsonTest.php: an object stays an
 // object whatever its keys look like, so `{"0":"a"}` never signs as `["a"]`.
 const vectors = JSON.parse(readFileSync(join(fixtures, 'canonical-vectors.json'), 'utf8')).vectors;
-for (const { name, input, canonical: expected } of vectors) {
+for (const { name, input, canonical: expected, error } of vectors) {
     test(`canonical JSON parity vector: ${name}`, () => {
-        assert.equal(canonical(JSON.parse(input)), expected);
+        if (error !== undefined) {
+            assert.throws(() => canonical(JSON.parse(input)));
+        } else {
+            assert.equal(canonical(JSON.parse(input)), expected);
+        }
     });
 }
+
+test('canonical JSON refuses integers outside the safe range, and BigInt', () => {
+    assert.equal(canonical(Number.MAX_SAFE_INTEGER), '9007199254740991');
+    assert.equal(canonical(Number.MIN_SAFE_INTEGER), '-9007199254740991');
+    assert.throws(() => canonical(Number.MAX_SAFE_INTEGER + 1), /safe/);
+    assert.throws(() => canonical(Number.MIN_SAFE_INTEGER - 1), /safe/);
+    assert.throws(() => canonical({ a: [{ b: 2 ** 60 }] }), /safe/);
+    assert.throws(() => canonical(1n));
+});

@@ -1,5 +1,5 @@
 {
-    "about": "Canonical JSON parity vectors. Each `input` is a JSON document as text; decode it preserving objects (PHP json_decode without assoc, JS JSON.parse) and the canonical form must equal `canonical` byte for byte. Checked by tests/Unit/CanonicalJsonTest.php and council/test/record.test.mjs.",
+    "about": "Canonical JSON parity vectors. Each `input` is a JSON document as text; decode it preserving objects (PHP json_decode without assoc, JS JSON.parse) and the canonical form must equal `canonical` byte for byte, or, where the vector has `error` instead, encoding must be refused. Checked by tests/Unit/CanonicalJsonTest.php and council/test/record.test.mjs.",
     "vectors": [
         { "name": "object with key 0 stays an object", "input": "{\"0\":\"a\"}", "canonical": "{\"0\":\"a\"}" },
         { "name": "object with keys 0..n-1 in order stays an object", "input": "{\"0\":\"a\",\"1\":\"b\"}", "canonical": "{\"0\":\"a\",\"1\":\"b\"}" },
@@ -12,6 +12,12 @@
         { "name": "nested objects and lists", "input": "{\"obj\":{\"1\":{\"0\":\"z\"},\"0\":[]},\"list\":[{\"0\":\"a\"},{},[]]}", "canonical": "{\"list\":[{\"0\":\"a\"},{},[]],\"obj\":{\"0\":[],\"1\":{\"0\":\"z\"}}}" },
         { "name": "list of empty containers", "input": "[[],{},[{}],{\"0\":[]}]", "canonical": "[[],{},[{}],{\"0\":[]}]" },
         { "name": "empty-string key", "input": "{\"\":1,\"a\":2}", "canonical": "{\"\":1,\"a\":2}" },
+        { "name": "largest safe integer 2^53-1 is accepted", "input": "{\"n\":9007199254740991}", "canonical": "{\"n\":9007199254740991}" },
+        { "name": "smallest safe integer -(2^53-1) is accepted", "input": "[-9007199254740991]", "canonical": "[-9007199254740991]" },
+        { "name": "2^53 is refused", "input": "{\"n\":9007199254740992}", "error": "unsafe_integer" },
+        { "name": "-2^53 is refused", "input": "[-9007199254740992]", "error": "unsafe_integer" },
+        { "name": "a float is refused", "input": "{\"n\":1.5}", "error": "float" },
+        { "name": "an unsafe integer nested deep is refused", "input": "{\"a\":[{\"b\":9007199254740992}]}", "error": "unsafe_integer" },
         { "name": "the decision.v1 shape is unchanged", "input": "{\"rounds\":[{\"outcomes\":{\"approve\":2,\"abstain\":1},\"number\":1}],\"waivers\":[],\"covers\":{\"versions\":null,\"fingerprints\":[]}}", "canonical": "{\"covers\":{\"fingerprints\":[],\"versions\":null},\"rounds\":[{\"number\":1,\"outcomes\":{\"abstain\":1,\"approve\":2}}],\"waivers\":[]}" }
     ]
 }

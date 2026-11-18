@@ -26,6 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
   **What you must do: nothing.** Every shape this package signs or hashes (`change-council/decision.v1`, the audit chain, the owner-action digest) uses string keys for its objects and `stdClass` only when empty, so none of their bytes change: existing decision records verify, `council:verify-log` passes on an existing ledger, and step-up digests are the same. This was checked against a live ledger (627 audit events, every stored hash recomputed identically before and after). Only if your own code passes `CanonicalJson::encode()` a non-empty `stdClass` with integer-like keys, an `ArrayObject`, or a reordered integer-keyed array does its output change, and in each case the new output is the correct one.
 
+- **Canonical JSON refuses integers JavaScript cannot represent exactly.** `Support\CanonicalJson` (PHP) and `canonical()` in `council/lib/record.mjs` (Node) now throw on any integer outside `-(2^53-1)..(2^53-1)`, the same way both already refused floats. Past that range a JavaScript number is rounded, so a record PHP signed with such a value would fail to verify in Node (or verify against different digits). PHP throws `InvalidArgumentException`; `RecordSigner::verify()` reports it as `not_canonical`. New vectors in `tests/fixtures/canonical-vectors.json` (2^53-1 accepted, 2^53 and -2^53 refused) run in both suites. Object keys are strings in JSON and are not range-checked.
+
+  **What you must do: nothing, unless you sign or hash a large integer yourself.** Nothing this package writes comes near the limit (sequence numbers, counts, weights, round numbers), and no existing record holds one: a live ledger of 627 audit events has no integer above 627 in absolute value, and every stored hash recomputes identically. If your own code passes `CanonicalJson::encode()` (or `OwnerAction` params) an integer past 2^53-1, such as a 64-bit id or a nanosecond timestamp, it now throws: send it as a string.
+
 ## [0.8.0] - 2026-11-13
 
 **Consumer action:** re-publish the pages

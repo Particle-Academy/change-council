@@ -6,13 +6,18 @@
 
 import { createPublicKey, verify } from 'node:crypto';
 
-/** Keys sorted by code unit (the same as byte order for ASCII keys), lists kept, floats refused. */
+/**
+ * Keys sorted by code unit (the same as byte order for ASCII keys), lists kept,
+ * floats refused, and integers outside -(2^53-1)..(2^53-1) refused: past that a
+ * JS number is not exact, so PHP and Node would sign different digits.
+ */
 export function canonical(value) {
     if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
     if (value !== null && typeof value === 'object') {
         return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonical(value[k])}`).join(',')}}`;
     }
     if (typeof value === 'number' && !Number.isInteger(value)) throw new Error('canonical JSON refuses floats');
+    if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('canonical JSON refuses integers outside the safe range -(2^53-1)..(2^53-1)');
     return JSON.stringify(value);
 }
 

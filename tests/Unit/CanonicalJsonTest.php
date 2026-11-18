@@ -16,16 +16,39 @@ function canonicalVectors(): array
     $file = json_decode((string) file_get_contents(__DIR__.'/../fixtures/canonical-vectors.json'), true, 16, JSON_THROW_ON_ERROR);
     $out = [];
     foreach ($file['vectors'] as $v) {
-        $out[$v['name']] = [$v['input'], $v['canonical']];
+        $out[$v['name']] = [$v['input'], $v['canonical'] ?? null, $v['error'] ?? null];
     }
 
     return $out;
 }
 
-test('JS-parity vector', function (string $input, string $canonical): void {
+test('JS-parity vector', function (string $input, ?string $canonical, ?string $error): void {
     // Decoded preserving objects: a JSON object is a stdClass, a JSON array a PHP array.
-    expect(CanonicalJson::encode(json_decode($input, false, 32, JSON_THROW_ON_ERROR)))->toBe($canonical);
+    $value = json_decode($input, false, 32, JSON_THROW_ON_ERROR);
+    if ($error !== null) {
+        expect(fn () => CanonicalJson::encode($value))->toThrow(InvalidArgumentException::class);
+
+        return;
+    }
+    expect(CanonicalJson::encode($value))->toBe($canonical);
 })->with(canonicalVectors());
+
+test('integers outside the JS safe range are refused', function (): void {
+    $max = 9007199254740991;
+    expect(CanonicalJson::encode($max))->toBe('9007199254740991')
+        ->and(CanonicalJson::encode(-$max))->toBe('-9007199254740991')
+        ->and(CanonicalJson::encode(['n' => 0]))->toBe('{"n":0}')
+        ->and(fn () => CanonicalJson::encode($max + 1))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => CanonicalJson::encode(-$max - 1))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => CanonicalJson::encode(PHP_INT_MAX))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => CanonicalJson::encode(PHP_INT_MIN))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => CanonicalJson::encode(['a' => [(object) ['b' => $max + 1]]]))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => CanonicalJson::encode(new ArrayObject([$max + 1])))->toThrow(InvalidArgumentException::class);
+});
+
+test('an integer-like KEY is a string and is not range-checked', function (): void {
+    expect(CanonicalJson::encode([9007199254740992 => 'a']))->toBe('{"9007199254740992":"a"}');
+});
 
 test('a stdClass with key 0 stays an object', function (): void {
     $o = new stdClass;

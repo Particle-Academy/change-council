@@ -18,6 +18,10 @@ use stdClass;
  * - no whitespace; `/` and non-ASCII unescaped; U+2028/2029 unescaped
  *   (JSON.stringify does not escape them either)
  * - floats refused: PHP and JavaScript do not print them the same way
+ * - integers outside -(2^53-1)..(2^53-1) refused ({@see self::MAX_SAFE_INTEGER}):
+ *   a JavaScript number is not exact past that, so Node would read and sign
+ *   different digits from the ones PHP signed. Use a string. Object KEYS are
+ *   strings in JSON and are not range-checked.
  *
  * The representation rule (what is a JSON object and what is a list):
  *
@@ -40,10 +44,16 @@ final class CanonicalJson
 {
     public const FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS | JSON_THROW_ON_ERROR;
 
+    /** JavaScript's Number.MAX_SAFE_INTEGER, 2^53 - 1. */
+    public const MAX_SAFE_INTEGER = 9007199254740991;
+
     public static function encode(mixed $value): string
     {
         if (is_float($value)) {
             throw new InvalidArgumentException('Canonical JSON refuses floats; use an integer or a string.');
+        }
+        if (is_int($value) && ($value > self::MAX_SAFE_INTEGER || $value < -self::MAX_SAFE_INTEGER)) {
+            throw new InvalidArgumentException('Canonical JSON refuses integers outside -(2^53-1)..(2^53-1); JavaScript cannot represent them exactly. Use a string.');
         }
         if ($value instanceof stdClass) {
             return self::object(get_object_vars($value));

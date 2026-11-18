@@ -39,7 +39,8 @@ Two halves in one repo:
   The shared fixture `tests/fixtures/decision-record.json` is verified by both
   suites; regenerate it with `php tests/fixtures/make-decision-fixture.php`.
   `tests/fixtures/canonical-vectors.json` holds the object-versus-list cases
-  (`{"0":"a"}` stays an object; see the rule in `CanonicalJson`'s docblock).
+  (`{"0":"a"}` stays an object; see the rule in `CanonicalJson`'s docblock)
+  and the refusals (floats, integers past 2^53-1), as an `error` expectation.
   Add a vector there, not in one suite only.
 
 ## The ledger
