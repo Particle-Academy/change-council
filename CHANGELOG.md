@@ -16,10 +16,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-18
+
 **Consumer action:** re-publish the pages
 (`php artisan vendor:publish --tag=council-pages --force`) to get the Invite
 agent form; `council:pages-check` reports the old copy as stale until you do.
-No migration.
+No migration. **If your step-up list names owner actions by hand** (rather than
+passing `OwnerAction::ALL`), add `member-invite` (`OwnerAction::MEMBER_INVITE`)
+to it, or invitations run without a step-up. A host using `OwnerAction::ALL`,
+or no step-up at all, has nothing to do for this.
 
 ### Added
 
