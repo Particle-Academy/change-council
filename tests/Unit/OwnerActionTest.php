@@ -12,11 +12,13 @@ use ChangeCouncil\StepUp\StepUpRefused;
  * depend on key order.
  */
 
-test('ALL lists exactly the ten owner endpoints', function (): void {
+test('ALL lists exactly the eleven owner endpoints', function (): void {
     expect(OwnerAction::ALL)->toBe([
         'approve-initiation', 'reject-initiation', 'override', 'revoke', 'change-silence-policy',
         'consumer-silence-policy', 'member-weight', 'member-project', 'member-remove', 'blocking-threshold',
+        'member-invite',
     ])
+        ->and(OwnerAction::MEMBER_INVITE)->toBe('member-invite')
         ->and(OwnerAction::APPROVE_INITIATION)->toBe('approve-initiation')
         ->and(OwnerAction::REJECT_INITIATION)->toBe('reject-initiation')
         ->and(OwnerAction::OVERRIDE)->toBe('override')

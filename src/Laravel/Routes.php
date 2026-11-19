@@ -30,6 +30,7 @@ final class Routes
             $router->get('members/{address}', [PageController::class, 'member'])->where('address', '[^/]+')->name('council.member');
 
             $router->get('api/v1/members', [CouncilController::class, 'members'])->name('council.api.members');
+            $router->post('api/v1/members', [CouncilController::class, 'inviteMember'])->name('council.api.member-invite');
             $router->get('api/v1/members/{address}', [CouncilController::class, 'member'])->where('address', '[^/]+')->name('council.api.member');
             $router->put('api/v1/members/{address}/weight', [CouncilController::class, 'memberWeight'])->where('address', '[^/]+')->name('council.api.member-weight');
             $router->put('api/v1/members/{address}/project', [CouncilController::class, 'memberProject'])->where('address', '[^/]+')->name('council.api.member-project');

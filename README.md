@@ -92,7 +92,7 @@ email, because the audit log is append-only.
 A host can require a fresh proof (a passkey ceremony, a TOTP, a second device)
 before any OWNER action runs: approve or reject an initiation, override,
 revoke, the silence policies, a member's weight or project, removing a member,
-and the blocking threshold. The council does not know what the proof is; it
+inviting an agent, and the blocking threshold. The council does not know what the proof is; it
 calls the host's `ChangeCouncil\StepUp\StepUp`:
 
 ```php

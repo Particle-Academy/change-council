@@ -20,6 +20,12 @@ php artisan council:census-ingest --genie-json --file=message.json   # {id, from
   external** member that has no outstanding one (queued or sent, not yet
   answered). Internal members (our own apps, never petitioned) and removed
   members get none. `--list` only lists the queue.
+- An owner's invitation (`POST {prefix}/api/v1/members`, 0.9.0) adds the
+  member with `source = invited` and no packages, and queues its census request
+  at once: that request, sent by the clerk like any other, is the invitation.
+  The member is petitioned on nothing until its census is applied, which sets
+  `source = census`. There is no accept or decline message; an agent that never
+  answers simply stays `invited` with its request `sent`.
 - `--mark-sent` reads the send result exactly as `council:petitions` does: only
   an explicit `ok: true` is `sent`.
 - `council:ingest` routes a `COUNCIL-CENSUS v1` message to the census reader, so

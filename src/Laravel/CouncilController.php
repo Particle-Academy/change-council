@@ -58,6 +58,11 @@ final class CouncilController
         return $this->withBody($request, fn (?array $body) => $this->api->memberProject($request->user(), $address, $body));
     }
 
+    public function inviteMember(Request $request): JsonResponse
+    {
+        return $this->withBody($request, fn (?array $body) => $this->api->inviteMember($request->user(), $body));
+    }
+
     public function removeMember(Request $request, string $address): JsonResponse
     {
         return $this->withBody($request, fn (?array $body) => $this->api->removeMember($request->user(), $address, $body));

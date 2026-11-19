@@ -72,6 +72,48 @@ final class Api
         return $this->memberAction($principal, $address, $body, $proof, OwnerAction::MEMBER_REMOVE, [], ['reason'], fn (array $b, string $owner) => $this->ledger->removeMember($address, $owner, $b['reason'] ?? null));
     }
 
+    /**
+     * POST /members {address, weight?, silence_policy?, project_name?,
+     * project_description?, project_url?}: the owner invites an agent onto the
+     * council ({@see Ledger::inviteMember()}). 201 with the new member, 200
+     * with `invited: false` when the address is already a current member.
+     *
+     * The duplicate is answered BEFORE the step-up gate: it writes nothing, so
+     * there is no action to bind a proof to, and the log never shows a step-up
+     * for an action that did not happen. A removed address is a 409, also
+     * before the gate. The ledger checks both again inside its transaction.
+     */
+    public function inviteMember(mixed $principal, ?array $body): ApiResponse
+    {
+        [$body, $proof] = self::takeStepUp($body);
+        $address = is_array($body) && is_string($body['address'] ?? null) ? $body['address'] : null;
+
+        return $this->allowed($principal, 'owner', ['ref' => null, 'address' => $address], function () use ($principal, $body, $proof, $address): ApiResponse {
+            if ($address === null || ! self::closed($body, ['address'], ['weight', 'silence_policy', ...Consumer::PROJECT_FIELDS])) {
+                return self::error(422, 'invalid_request');
+            }
+            if (! Ledger::validAddress($address)) {
+                return self::error(422, 'invalid_address');
+            }
+            $existing = $this->members()->find($address);
+            if ($existing !== null) {
+                return $existing->removed_at !== null
+                    ? self::error(409, 'invalid_state')
+                    : new ApiResponse(200, ['invited' => false, 'member' => $this->members()->profile($existing), 'consumer' => Presenter::consumer($existing)]);
+            }
+            $owner = $this->actor($principal);
+            $fields = $body;
+            unset($fields['address']);
+            $result = $this->stepUpGate($principal, null, $owner, new OwnerAction(OwnerAction::MEMBER_INVITE, null, $address, $body), $proof, fn () => $this->ledger->inviteMember($address, $fields, $owner));
+            if ($result instanceof ApiResponse) {
+                return $result;
+            }
+            $member = $result['member'];
+
+            return new ApiResponse($result['invited'] ? 201 : 200, ['invited' => $result['invited'], 'member' => $this->members()->profile($member), 'consumer' => Presenter::consumer($member)]);
+        });
+    }
+
     /** GET /members/{address}: the profile and the voting record, newest first. */
     public function member(mixed $principal, string $address): ApiResponse
     {

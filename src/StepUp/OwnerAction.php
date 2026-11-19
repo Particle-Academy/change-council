@@ -39,7 +39,10 @@ final class OwnerAction
 
     public const BLOCKING_THRESHOLD = 'blocking-threshold';
 
-    /** Every owner endpoint of the API, in route order. */
+    /** 0.9.0: the owner invites an agent; `address` is the invitee's. */
+    public const MEMBER_INVITE = 'member-invite';
+
+    /** Every owner endpoint of the API: route order, then each later addition at the end. */
     public const ALL = [
         self::APPROVE_INITIATION,
         self::REJECT_INITIATION,
@@ -51,6 +54,7 @@ final class OwnerAction
         self::MEMBER_PROJECT,
         self::MEMBER_REMOVE,
         self::BLOCKING_THRESHOLD,
+        self::MEMBER_INVITE,
     ];
 
     /** @param array<string, mixed> $params */

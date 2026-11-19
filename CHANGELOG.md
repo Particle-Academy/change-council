@@ -16,6 +16,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+**Consumer action:** re-publish the pages
+(`php artisan vendor:publish --tag=council-pages --force`) to get the Invite
+agent form; `council:pages-check` reports the old copy as stale until you do.
+No migration.
+
+### Added
+
+- **The owner can invite an agent onto the council.** Until now a member could
+  only arrive as a hand-written row in `ConsumerSeed`, shipped in a release and
+  applied by `council:seed-consumers` or a migration. New owner endpoint
+  `POST {prefix}/api/v1/members` `{address, weight?, silence_policy?,
+  project_name?, project_description?, project_url?}` and owner method
+  `Ledger::inviteMember()`. The address must be `name@workspace` (the AgentInbox
+  shape; anything else is 422 `invalid_address`). The member is added with
+  `source = invited`, no packages and no census, audited as `consumer.invited`
+  (the address, weight, policy and the NAMES of the project fields set, never
+  their text), and a census request is queued for it at once
+  (`census.requested`). That request, sent by the clerk over AgentInbox like any
+  other census request, is the invitation. Its census answer sets the packages
+  that decide which Changes it is required to vote on; until then it is
+  petitioned on nothing. 201 with `{invited: true, member, consumer}`.
+  - **Idempotent:** an address that is already a current member is a 200 with
+    `invited: false`. Nothing is written, nothing is queued, and no step-up is
+    asked for, because there is no action to bind a proof to.
+  - **A removed member is a 409** `invalid_state`: reinstating is not an
+    invitation, and this release does not add one.
+  - **No accept or decline protocol.** What the pages show is the census
+    request's state (queued, sent) and, once it answers, `source = census`.
+  - New owner action `OwnerAction::MEMBER_INVITE` (`member-invite`), appended
+    to `OwnerAction::ALL`, so it goes through the step-up gate. **A host whose
+    step-up list is `OwnerAction::ALL` gates it with no change; a host that
+    lists actions by hand must add it, or invitations run without a step-up.**
+  - New `Census::requestFor(Consumer)`: one request for one member, with the
+    same rules as `request()` (which now uses it).
+  - The `Council/Index` page gets an owner-only **Invite agent** form in its
+    Consumers card, and its `endpoints` prop a new `invite` URL. An invited
+    member that has not answered shows as `invited: no census yet`.
+
 ### Changed
 
 - **Docs:** `AGENTS.md` is now the guide to using this package (install, its entries on the Fancy MCP catalog server, API essentials, traps). The contributor notes it held moved to `CONTRIBUTING.md`, and `CLAUDE.md` is now a symlink to it. The README points to the MCP server and to `AGENTS.md`. No code changed; nothing to do.

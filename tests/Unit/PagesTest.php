@@ -81,6 +81,28 @@ test('the profile has an owner-only "Remove from council" control, staged behind
         ->and($member)->toContain('/remove`');
 });
 
+/*
+ * 0.9.0: the owner invites an agent from the council page. The form is drawn
+ * only for an owner, posts to the `invite` endpoint through send() (so the
+ * host's step-up handler runs), and words the result from the answer: there is
+ * no accept/decline, only the census request's state.
+ */
+test('the council page has an owner-only "Invite agent" form that posts to the invite endpoint', function (): void {
+    $index = pageSources()['Index.tsx'];
+
+    expect($index)->toContain('data-action="invite-agent"')
+        ->and($index)->toContain('data-action="submit-invite"')
+        ->and($index)->toContain('data-action="cancel-invite"')
+        ->and($index)->toContain('data-field="invite-address"')
+        ->and($index)->toContain('data-field="invite-weight"')
+        ->and($index)->toContain('data-field="invite-silence-policy"')
+        ->and($index)->toContain('data-field="invite-project-name"')
+        ->and($index)->toContain('data-testid="council-invite"')
+        ->and($index)->toMatch("/send<[^>]*>\\('POST',\\s*endpoints\\.invite/")
+        ->and($index)->toMatch('/canSetPolicy\s*&&\s*\(\s*<Button data-action="invite-agent"/')
+        ->and($index)->toContain('invite: string');
+});
+
 test('the members list shows removed members apart, under Former members', function (): void {
     $members = pageSources()['Members.tsx'];
 

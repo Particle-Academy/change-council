@@ -34,21 +34,38 @@ final class Census
         return $this->db->transaction(function (): array {
             $created = [];
             foreach (Consumer::query()->where('internal', false)->whereNull('removed_at')->orderBy('address')->get() as $consumer) {
-                if (CensusRequest::query()->where('agent_address', $consumer->address)->whereNull('answered_at')->whereIn('delivery', ['queued', 'sent'])->exists()) {
-                    continue;
+                $request = $this->requestFor($consumer);
+                if ($request !== null) {
+                    $created[] = $request;
                 }
-                $request = CensusRequest::query()->create([
-                    'consumer_id' => $consumer->id,
-                    'agent_address' => $consumer->address,
-                    'nonce' => bin2hex(random_bytes(16)),
-                    'queued_at' => Carbon::now(),
-                    'delivery' => 'queued',
-                ]);
-                $this->audit->append(null, 'clerk', 'census.requested', ['request' => $request->id, 'to' => $consumer->address]);
-                $created[] = $request;
             }
 
             return $created;
+        });
+    }
+
+    /**
+     * Queues one request for this member, unless it already has an outstanding
+     * one, is internal or was removed (null). Also how an invitation reaches a
+     * new member (`Ledger::inviteMember()`).
+     */
+    public function requestFor(Consumer $consumer): ?CensusRequest
+    {
+        return $this->db->transaction(function () use ($consumer): ?CensusRequest {
+            if ($consumer->internal || $consumer->removed_at !== null
+                || CensusRequest::query()->where('agent_address', $consumer->address)->whereNull('answered_at')->whereIn('delivery', ['queued', 'sent'])->exists()) {
+                return null;
+            }
+            $request = CensusRequest::query()->create([
+                'consumer_id' => $consumer->id,
+                'agent_address' => $consumer->address,
+                'nonce' => bin2hex(random_bytes(16)),
+                'queued_at' => Carbon::now(),
+                'delivery' => 'queued',
+            ]);
+            $this->audit->append(null, 'clerk', 'census.requested', ['request' => $request->id, 'to' => $consumer->address]);
+
+            return $request;
         });
     }
 

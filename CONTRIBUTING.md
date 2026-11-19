@@ -54,7 +54,7 @@ Two halves in one repo:
   like a whitelisted agent. Anything non-whitelisted goes to `awaiting_owner`.
 - Owner methods (`approveInitiation`, `rejectInitiation`, `override`,
   `revoke`, `setSilencePolicy`, `setChangeSilencePolicy`, `setWeight`,
-  `setProject`, `setBlockingThreshold`, `removeMember`) are called ONLY from
+  `setProject`, `setBlockingThreshold`, `removeMember`, `inviteMember`) are called ONLY from
   `Http\Api` behind the `owner` ability. Never from `src/Console`: an agent can
   run any command with any flag. `CommandsTest` scans for it.
 - `Petitions\Ingest` is the only writer of votes. Order: replay check, flags,

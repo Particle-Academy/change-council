@@ -46,6 +46,8 @@ final class PageController
                 'consumers' => $this->url('api/v1/consumers'),
                 'index' => $this->url(''),
                 'members' => $this->url('members'),
+                // POST here invites an agent (owner only, behind the step-up gate).
+                'invite' => $this->url('api/v1/members'),
             ],
         ]);
     }

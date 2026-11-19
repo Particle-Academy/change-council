@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ChangeCouncil\Ledger;
 
 use ChangeCouncil\Audit\AuditLog;
+use ChangeCouncil\Census\Census;
 use ChangeCouncil\Models\Change;
 use ChangeCouncil\Models\Consumer;
 use ChangeCouncil\Models\Decision;
@@ -617,6 +618,28 @@ final class Ledger
         if ($fields === [] || array_diff(array_keys($fields), Consumer::PROJECT_FIELDS) !== []) {
             throw new Refused('invalid_request', 'fields must be among '.implode(', ', Consumer::PROJECT_FIELDS));
         }
+        $clean = $this->cleanProject($fields);
+
+        return $this->db->transaction(function () use ($address, $clean, $owner): Consumer {
+            $consumer = Consumer::query()->where('address', $address)->lockForUpdate()->first() ?? throw new Refused('not_found', "no consumer {$address}");
+            $changed = array_keys(array_filter($clean, fn (?string $v, string $k) => $consumer->getAttribute($k) !== $v, ARRAY_FILTER_USE_BOTH));
+            if ($changed !== []) {
+                $consumer->forceFill($clean)->save();
+                $this->audit->append(null, self::owner($owner), 'consumer.project', ['address' => $address, 'fields' => $changed]);
+            }
+
+            return $consumer->fresh();
+        });
+    }
+
+    /**
+     * Project fields trimmed, blank as null, length- and URL-checked.
+     *
+     * @param  array<string, mixed>  $fields  keys among Consumer::PROJECT_FIELDS
+     * @return array<string, ?string>
+     */
+    private function cleanProject(array $fields): array
+    {
         $limits = [
             'project_name' => (int) ($this->settings['project_name_max'] ?? 200),
             'project_description' => (int) ($this->settings['project_description_max'] ?? 5000),
@@ -638,15 +661,89 @@ final class Ledger
             $clean[$key] = $value;
         }
 
-        return $this->db->transaction(function () use ($address, $clean, $owner): Consumer {
-            $consumer = Consumer::query()->where('address', $address)->lockForUpdate()->first() ?? throw new Refused('not_found', "no consumer {$address}");
-            $changed = array_keys(array_filter($clean, fn (?string $v, string $k) => $consumer->getAttribute($k) !== $v, ARRAY_FILTER_USE_BOTH));
-            if ($changed !== []) {
-                $consumer->forceFill($clean)->save();
-                $this->audit->append(null, self::owner($owner), 'consumer.project', ['address' => $address, 'fields' => $changed]);
-            }
+        return $clean;
+    }
 
-            return $consumer->fresh();
+    /**
+     * An agent address the owner may invite: `name@workspace`, each part a
+     * letter or digit then letters, digits, `.`, `_` or `-`, 191 characters at
+     * most in all. Exactly the AgentInbox address shape; anything else (a
+     * space, a slash, a second `@`) is refused rather than stored and sent to.
+     */
+    public static function validAddress(mixed $address): bool
+    {
+        return is_string($address) && strlen($address) <= 191
+            && preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}@[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/D', $address) === 1;
+    }
+
+    /**
+     * The owner invites an agent onto the council (0.9.0). Adds the member with
+     * `source = invited`, no packages and no census, audits `consumer.invited`,
+     * and queues a census request for it ({@see Census::requestFor()}): that
+     * request, sent by the clerk over AgentInbox, IS the invitation. The
+     * member's packages, and so which Changes it is required to vote on, come
+     * from its census answer; until then it is petitioned on nothing.
+     *
+     * `fields` may hold `weight` (default 1), `silence_policy` (default
+     * escalate) and the project fields. Idempotent: an address that is already
+     * a current member changes nothing and writes nothing (`invited: false`).
+     * A REMOVED member is refused (`invalid_state`): reinstating is not an
+     * invitation.
+     *
+     * @param  array<string, mixed>  $fields
+     * @return array{member: Consumer, invited: bool}
+     */
+    public function inviteMember(string $address, array $fields, string $owner): array
+    {
+        if (! self::validAddress($address)) {
+            throw new Refused('invalid_address', 'address must be name@workspace');
+        }
+        $allowed = ['weight', 'silence_policy', ...Consumer::PROJECT_FIELDS];
+        if (array_diff(array_keys($fields), $allowed) !== []) {
+            throw new Refused('invalid_request', 'fields must be among '.implode(', ', $allowed));
+        }
+        $weight = $fields['weight'] ?? 1;
+        $max = (int) ($this->settings['max_weight'] ?? 1000);
+        if (! is_int($weight) || $weight < 0 || $weight > $max) {
+            throw new Refused('invalid_weight', "weight must be an integer from 0 to {$max}");
+        }
+        $policy = $fields['silence_policy'] ?? 'escalate';
+        if (! in_array($policy, Consumer::POLICIES, true)) {
+            throw new Refused('invalid_policy', 'policy must be one of '.implode(', ', Consumer::POLICIES));
+        }
+        $project = array_filter($this->cleanProject(array_intersect_key($fields, array_flip(Consumer::PROJECT_FIELDS))), fn (?string $v) => $v !== null);
+
+        return $this->db->transaction(function () use ($address, $weight, $policy, $project, $owner): array {
+            $existing = Consumer::query()->where('address', $address)->lockForUpdate()->first();
+            if ($existing !== null) {
+                if ($existing->removed_at !== null) {
+                    throw new Refused('invalid_state', "{$address} was removed from the council");
+                }
+
+                return ['member' => $existing, 'invited' => false];
+            }
+            $consumer = Consumer::query()->create([
+                'address' => $address,
+                'workspace' => substr($address, strpos($address, '@') + 1),
+                'packages' => [],
+                'watches' => [],
+                'weight' => $weight,
+                'silence_policy' => $policy,
+                'whitelisted' => false,
+                'internal' => false,
+                'source' => 'invited',
+                'census_at' => null,
+                ...$project,
+            ]);
+            // The chain reads: consumer.invited, then census.requested (which
+            // names the request and the address). Only validated values and
+            // field NAMES go in, never the project text.
+            $this->audit->append(null, self::owner($owner), 'consumer.invited', [
+                'address' => $address, 'weight' => $weight, 'silence_policy' => $policy, 'fields' => array_keys($project),
+            ]);
+            (new Census($this->db, $this->audit))->requestFor($consumer);
+
+            return ['member' => $consumer->fresh(), 'invited' => true];
         });
     }
 

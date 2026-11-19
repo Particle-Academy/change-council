@@ -66,6 +66,7 @@ dataset('owner endpoints', [
     'member project' => ['PUT', '/api/v1/members/moic@moic-suite/project', ['project_name' => 'MOIC'], 'member-project', null, 'moic@moic-suite'],
     'member remove' => ['POST', '/api/v1/members/moic@moic-suite/remove', ['reason' => 'left'], 'member-remove', null, 'moic@moic-suite'],
     'blocking threshold' => ['PUT', '/api/v1/settings/blocking-threshold', ['threshold' => 2], 'blocking-threshold', null, null],
+    'member invite' => ['POST', '/api/v1/members', ['address' => 'newbie@new-workspace', 'weight' => 2], 'member-invite', null, 'newbie@new-workspace'],
 ]);
 
 test('the default hook is NoStepUp', function (): void {
