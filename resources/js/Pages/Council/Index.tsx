@@ -3,7 +3,7 @@ import { Badge, Button, Callout, Card, Heading, Input, NumberField, Select, Stat
 import { useMemo, useState } from 'react';
 import { type ConsumerRow, type HostLink, type MemberRow, send, refusal, type Summary, usePoll } from './parts/api';
 import { navVariant } from './parts/nav';
-import { censusRequestLabel, label, POLICIES, sourceTone, STATES, stateTone } from './parts/tone';
+import { label, POLICIES, sourceTone, STATES, stateTone } from './parts/tone';
 
 /** The invite API's answer: 201 a new member, 200 `invited: false` for a current one. */
 type InviteAnswer = { invited: boolean; member: MemberRow; consumer: ConsumerRow };
@@ -15,10 +15,12 @@ const ADDRESS = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}@[A-Za-z0-9][A-Za-z0-9._-]{0,99
 function inviteMessage(answer: InviteAnswer): string {
     const m = answer.member;
     if (!answer.invited) return `${m.address} is already a member. Nothing was changed; set its weight or policy on its own page.`;
-    const request = censusRequestLabel(m.census_request);
+    const request = m.census_request;
 
     return `Invited ${m.address} (weight ${m.weight}, ${label(m.silence_policy)}). ${
-        request ? `Its invitation is a ${request}: the clerk sends it over AgentInbox.` : 'No census request was queued.'
+        request === null
+            ? 'No census request was queued.'
+            : `Its invitation, a census request, is ${request.delivery === 'sent' ? 'sent' : 'queued for the clerk to send over AgentInbox'}.`
     } It is petitioned on nothing until it answers with its packages.`;
 }
 
