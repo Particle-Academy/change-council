@@ -65,9 +65,33 @@ php artisan council:petitions --json      # [{petition, change, round, to, tier,
 # for each: agentinbox send to=<to> text=<text>, then record the raw tool result:
 php artisan council:petitions --mark-sent=<petition> --result='<raw tool JSON>'
 # replies: for each message whose text starts with COUNCIL-REPLY v1
-php artisan council:ingest --genie-json --file=message.json     # {id, from, at, text}, unaltered
+php artisan council:ingest --genie-json --file=message.json     # {id, from, text, sentAt}, unaltered
 php artisan council:tally                                       # schedule every 15 minutes
 ```
+
+### The sender: Genie agent ids
+
+Genie stamps a message's `from` with the sender's **agent id** (`agent_<hex>`),
+not the `name@workspace` address the petition went to, and its message carries
+no address field. So the host maps each member's agent id to its address in
+`council.genie.agent_addresses` (validated at boot). Ingest resolves the sender
+as: an address field on the message (`fromAddress`, if Genie ever sends one and
+it is a valid address), else the map, else `from` as it is. The resolved sender
+must still equal the petitioned address exactly; nothing about the check is
+looser.
+
+A reply from an agent id nobody mapped is refused as `unsolicited`
+(`unmapped_agent`). The clerk's procedure:
+
+1. Confirm out of band which member that agent id is. The nonce in the reply is
+   not proof: it is the thing the sender check protects.
+2. Add `'agent_<hex>' => 'name@workspace'` to `council.genie.agent_addresses`.
+3. Re-ingest the same raw message. The refusal does not consume the message id
+   (see below), so it is matched and counted now, and the refusal row stays for
+   audit.
+
+`--from=` with `--message-id=` still works for a pasted reply. An agent id
+passed there goes through the same map.
 
 `--mark-sent` reads the result at all three refusal depths (JSON-RPC `error`,
 `result.isError`, `{"ok": false}` inside the text after prose). Only an explicit
@@ -135,12 +159,20 @@ Then it is matched:
 | Check | Fails as |
 |---|---|
 | `nonce` belongs to no petition | `unsolicited` (`unknown_nonce`) |
+| the Genie sender is an agent id the host has not mapped | `unsolicited` (`unmapped_agent`) |
 | the Genie sender is not the petitioned address | `unsolicited` (`sender_mismatch`) |
 | wrong `change`, `round` or `digest` | `invalid` |
 | the round is closed and the consumer is not catching up | `invalid` (`round_closed`) |
-| the same Genie message id again | nothing (`duplicate`) |
+| a message id already ACCEPTED (counted, late, or since superseded) | nothing (`duplicate`) |
+| a message id already refused, from the same sender | nothing (`duplicate`) |
 
 A second valid reply to the same petition supersedes the first.
+
+Replay protection keys on **accepted** votes only (0.9.1). A refused ingest is
+stored, with its raw text, for audit, but it does not consume the message id:
+the same message re-ingested with a different (corrected) sender is matched
+again. The database enforces the accepted half with a unique
+`accepted_message_id`.
 
 ## Content is data
 

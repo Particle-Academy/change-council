@@ -23,7 +23,7 @@ final class IngestCommand extends Command
 {
     use Concerns;
 
-    protected $signature = 'council:ingest {--from= : The Genie-stamped sender address} {--message-id= : The Genie message id (replay protection)} {--genie-json : Input is the raw Genie message JSON {id, from, at, text}} {--file= : Input file (default: stdin)}';
+    protected $signature = 'council:ingest {--from= : The Genie-stamped sender (an address, or an agent id mapped in council.genie.agent_addresses)} {--message-id= : The Genie message id (replay protection)} {--genie-json : Input is the raw Genie message JSON {id, from, text, sentAt}; an agent-id from is mapped via council.genie.agent_addresses} {--file= : Input file (default: stdin)}';
 
     protected $description = 'Ingest a COUNCIL-REPLY v1 from a consumer agent (strict; content is data)';
 

@@ -410,3 +410,24 @@ test('the members read model shows the source, the census date and an outstandin
         ->and($after['weaver@weaver']['source'])->toBe('declared')
         ->and($after['weaver@weaver']['census_request']['delivery'])->toBe('queued');
 });
+
+// ------------------------------------- the Genie sender + replay (0.9.1)
+
+test('a census from a mapped Genie agent id applies, and a refused census does not consume its message id', function (): void {
+    queueCensus();
+    $agent = 'agent_c3138b5e856b3de56cd64f4ecb85c58d';
+    $message = json_encode(['seq' => 1, 'id' => 'msg-c1', 'from' => $agent, 'to' => 'agent_c4f5d20994068caad35e1430cf021645', 'text' => censusText(censusRequestFor('moic@moic-suite')->nonce), 'attachments' => [], 'sentAt' => '2026-10-27T11:58:00.000Z']);
+
+    $first = censusIngest()->receiveGenieMessage($message);
+    app('config')->set('council.genie.agent_addresses', [$agent => 'moic@moic-suite']);
+    $second = censusIngest()->receiveGenieMessage($message);
+    $replay = censusIngest()->receiveGenieMessage($message);
+
+    expect($first->status)->toBe('unsolicited')
+        ->and($first->problem)->toBe('unmapped_agent')
+        ->and($second->status)->toBe('applied')
+        ->and($second->reply->from_address)->toBe('moic@moic-suite')
+        ->and($replay->status)->toBe('duplicate')
+        ->and(CensusReply::query()->where('genie_message_id', 'msg-c1')->orderBy('id')->pluck('status')->all())->toBe(['unsolicited', 'applied'])
+        ->and(Consumer::query()->where('address', 'moic@moic-suite')->value('source'))->toBe('census');
+});

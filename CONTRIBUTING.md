@@ -57,6 +57,16 @@ Two halves in one repo:
   `setProject`, `setBlockingThreshold`, `removeMember`, `inviteMember`) are called ONLY from
   `Http\Api` behind the `owner` ability. Never from `src/Console`: an agent can
   run any command with any flag. `CommandsTest` scans for it.
+- The sender of a raw Genie message is resolved by `Support\GenieMessage`
+  (0.9.1): Genie's `from` is an agent id, so `fromAddress` if valid, else
+  `council.genie.agent_addresses`, else `from`. The resolved sender must still
+  equal the petitioned address; never loosen that comparison. An unmapped agent
+  id is refused as `unmapped_agent`.
+- Replay keys on ACCEPTED rows (0.9.1): `accepted_message_id` (unique,
+  nullable) is set only on a counted/late vote or an applied census reply. A
+  refusal is stored with `genie_message_id` (plain index) and does not block a
+  re-ingest from a different sender; the same id from the same sender is a
+  duplicate.
 - `Petitions\Ingest` is the only writer of votes. Order: replay check, flags,
   strict parse (`ReplyParser`), nonce lookup, sender match, change/round/digest
   match, withdrawn check, open-or-catch-up, then store. The tally reads only

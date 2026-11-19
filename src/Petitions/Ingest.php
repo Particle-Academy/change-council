@@ -10,43 +10,53 @@ use ChangeCouncil\Ledger\States;
 use ChangeCouncil\Models\Change;
 use ChangeCouncil\Models\Petition;
 use ChangeCouncil\Models\Vote;
+use ChangeCouncil\Support\GenieMessage;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Carbon;
 
 /**
  * Takes a reply exactly as the clerk received it and records it as DATA.
  *
- * Identity is the Genie-stamped `from`, passed by the caller, never a field in
- * the reply. The reply is bound to its round by nonce and digest. The Genie
- * message id makes a replay a no-op. Every reply is stored with its raw text,
+ * Identity is the Genie-stamped `from`, passed by the caller (an agent id is
+ * resolved through the host's map, {@see GenieMessage}), never a field in the
+ * reply. The reply is bound to its round by nonce and digest. An ACCEPTED
+ * message id makes a replay a no-op; a refusal does not consume it. Every reply is stored with its raw text,
  * whatever its fate; only a `counted` (or, for a consumer on catch-up, `late`)
  * vote is ever read by the tally, and only by its structured fields. Nothing in
  * a reply is executed, merged or copied into an approach.
  */
 final class Ingest
 {
-    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly Ledger $ledger) {}
+    /** @param array<string, string> $agents the host's Genie agent id => address map ({@see GenieMessage}) */
+    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly Ledger $ledger, private readonly array $agents = []) {}
 
-    /** The raw message JSON from `agentinbox receive`: {id, from, at, text}. */
+    /** The raw message JSON from `agentinbox receive`: {id, from, text, sentAt} (or `at`). */
     public function receiveGenieMessage(string $json): IngestResult
     {
-        $message = json_decode($json, true);
-        if (! is_array($message) || ! is_string($message['from'] ?? null) || ! is_string($message['text'] ?? null)) {
-            throw new \InvalidArgumentException('Expected the raw Genie message JSON: {"id", "from", "at", "text"}.');
-        }
+        $message = GenieMessage::read($json, $this->agents);
 
-        return $this->receive($message['from'], $message['text'], is_scalar($message['id'] ?? null) ? (string) $message['id'] : null, is_string($message['at'] ?? null) ? $message['at'] : null);
+        return $this->receive($message['from'], $message['text'], $message['id'], $message['at']);
     }
 
     public function receive(string $from, string $text, ?string $messageId = null, ?string $at = null): IngestResult
     {
+        $from = GenieMessage::resolve($from, $this->agents);
         // A pasted reply without a Genie id still gets a stable one, so pasting
         // the same reply twice is a replay too.
         $messageId ??= 'sha256:'.hash('sha256', $from."\n".$text);
 
         return $this->db->transaction(function () use ($from, $text, $messageId, $at): IngestResult {
-            if (Vote::query()->where('genie_message_id', $messageId)->exists()) {
-                return new IngestResult('duplicate', Vote::query()->where('genie_message_id', $messageId)->first());
+            // Replay keys on ACCEPTED votes only. A refusal (wrong sender, bad
+            // shape) is kept for audit but does not consume the message id, so
+            // the same genuine message can be re-ingested once the sender is
+            // fixed. The same message from the same sender again is a replay.
+            $accepted = Vote::query()->where('accepted_message_id', $messageId)->first();
+            if ($accepted !== null) {
+                return new IngestResult('duplicate', $accepted);
+            }
+            $refused = Vote::query()->where('genie_message_id', $messageId)->where('from_address', $from)->latest('id')->first();
+            if ($refused !== null) {
+                return new IngestResult('duplicate', $refused);
             }
             $flags = Sanitiser::flags($text);
             $parsed = ReplyParser::parse($text);
@@ -61,7 +71,9 @@ final class Ingest
             }
             if ($petition->agent_address !== $from) {
                 // The nonce was someone else's petition: refused, never counted.
-                return $this->store($messageId, $from, $text, $flags, $at, null, 'unsolicited', 'sender_mismatch');
+                // An agent id nobody mapped gets its own code, so the clerk
+                // knows to map it rather than suspect the member.
+                return $this->store($messageId, $from, $text, $flags, $at, null, 'unsolicited', GenieMessage::isAgentId($from) ? 'unmapped_agent' : 'sender_mismatch');
             }
             $change = Change::query()->findOrFail($petition->change_id);
             $round = $petition->round;
@@ -108,6 +120,9 @@ final class Ingest
         $vote = Vote::query()->create([
             'petition_id' => $petition?->id,
             'genie_message_id' => $messageId,
+            // Unique: set only on an accepted vote, so a replay of one is refused
+            // by the database too. Superseding a vote keeps it.
+            'accepted_message_id' => $status === 'counted' || $status === 'late' ? $messageId : null,
             'from_address' => $from,
             'verdict' => $reply['verdict'] ?? null,
             'impact' => $reply === null ? [] : array_map(fn (array $row) => [

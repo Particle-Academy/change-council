@@ -153,3 +153,133 @@ test('ingest accepts the raw Genie message JSON the clerk pipes from agentinbox 
     expect($result->status)->toBe('counted')
         ->and($result->vote->genie_message_id)->toBe('genie-77');
 });
+
+// ------------------------------------------------- the Genie sender (0.9.1)
+
+/*
+ * Genie's raw message `from` is an AGENT ID (`agent_<hex>`), not the
+ * `name@workspace` address a petition is sent to, and its timestamp is
+ * `sentAt`. Measured on CC-fancy-0043: six genuine replies piped with
+ * --genie-json were all stored as `unsolicited (sender_mismatch)`.
+ */
+const MOIC_AGENT = 'agent_81bb07b176c871d7e70d4c45afed1cf1';
+
+function genieMessage(string $id, string $from, string $text, array $extra = []): string
+{
+    return json_encode(['seq' => 1, 'id' => $id, 'from' => $from, 'to' => 'agent_c4f5d20994068caad35e1430cf021645', 'text' => $text, 'attachments' => [], 'sentAt' => '2026-10-27T11:58:00.000Z', 'readAt' => '2026-10-27T11:59:00.000Z', ...$extra]);
+}
+
+test('a Genie message from an agent id the host has mapped is matched to the petitioned address', function (): void {
+    app('config')->set('council.genie.agent_addresses', [MOIC_AGENT => 'moic@moic-suite']);
+
+    $result = ingest()->receiveGenieMessage(genieMessage('msg-1', MOIC_AGENT, replyText($this->petition)));
+
+    expect($result->status)->toBe('counted')
+        ->and($result->vote->from_address)->toBe('moic@moic-suite')
+        ->and($this->petition->fresh()->outcome)->toBe('approve');
+});
+
+test('a Genie message from an UNMAPPED agent id is still refused, as unmapped_agent, never counted', function (): void {
+    $result = ingest()->receiveGenieMessage(genieMessage('msg-1', MOIC_AGENT, replyText($this->petition)));
+
+    expect($result->status)->toBe('unsolicited')
+        ->and($result->problem)->toBe('unmapped_agent')
+        ->and($result->vote->from_address)->toBe(MOIC_AGENT)
+        ->and($this->petition->fresh()->outcome)->toBeNull();
+});
+
+test('a mapped agent id is still held to the petition: mapped to another member it is a sender mismatch', function (): void {
+    app('config')->set('council.genie.agent_addresses', [MOIC_AGENT => 'weaver@weaver']);
+
+    $result = ingest()->receiveGenieMessage(genieMessage('msg-1', MOIC_AGENT, replyText($this->petition)));
+
+    expect($result->status)->toBe('unsolicited')
+        ->and($result->problem)->toBe('sender_mismatch');
+});
+
+test('an address field on the Genie message is preferred over the agent id', function (): void {
+    $result = ingest()->receiveGenieMessage(genieMessage('msg-1', MOIC_AGENT, replyText($this->petition), ['fromAddress' => 'moic@moic-suite']));
+
+    expect($result->status)->toBe('counted')
+        ->and($result->vote->from_address)->toBe('moic@moic-suite');
+});
+
+test('a malformed address field is ignored rather than trusted', function (): void {
+    $result = ingest()->receiveGenieMessage(genieMessage('msg-1', MOIC_AGENT, replyText($this->petition), ['fromAddress' => 'moic@moic-suite; weaver@weaver']));
+
+    expect($result->status)->toBe('unsolicited')
+        ->and($result->problem)->toBe('unmapped_agent');
+});
+
+test('the Genie sentAt is the received time when there is no at', function (): void {
+    app('config')->set('council.genie.agent_addresses', [MOIC_AGENT => 'moic@moic-suite']);
+
+    $result = ingest()->receiveGenieMessage(genieMessage('msg-1', MOIC_AGENT, replyText($this->petition)));
+
+    expect($result->vote->received_at->toIso8601ZuluString())->toBe('2026-10-27T11:58:00Z');
+});
+
+test('the agent-id map is validated at boot and names the bad entry', function (array $map, string $needle): void {
+    expect(fn () => councilApp(['council.genie.agent_addresses' => $map]))
+        ->toThrow(InvalidArgumentException::class, $needle);
+})->with([
+    'key is not an agent id' => [['moic' => 'moic@moic-suite'], '"moic"'],
+    'value is not an address' => [[MOIC_AGENT => 'moic'], MOIC_AGENT],
+    'not a map' => [['moic@moic-suite'], '"0"'],
+]);
+
+test('council:ingest --genie-json uses the map too', function (): void {
+    app('config')->set('council.genie.agent_addresses', [MOIC_AGENT => 'moic@moic-suite']);
+    $file = tempnam(sys_get_temp_dir(), 'genie');
+    file_put_contents($file, genieMessage('msg-1', MOIC_AGENT, replyText($this->petition)));
+
+    $out = runCommand('council:ingest', ['--genie-json' => true, '--file' => $file]);
+    @unlink($file);
+
+    expect($out)->toContain('counted');
+});
+
+// ------------------------------------- replay keys on ACCEPTED votes (0.9.1)
+
+test('a refused ingest does not consume the message id: the genuine message re-ingested with the right sender counts', function (): void {
+    $text = replyText($this->petition);
+    $refused = ingest()->receive(MOIC_AGENT, $text, 'msg-1');
+    $again = ingest()->receive('moic@moic-suite', $text, 'msg-1');
+
+    expect($refused->status)->toBe('unsolicited')
+        ->and($again->status)->toBe('counted')
+        ->and($this->petition->fresh()->outcome)->toBe('approve')
+        // The refusal is kept for audit.
+        ->and(Vote::query()->where('genie_message_id', 'msg-1')->orderBy('id')->pluck('status')->all())->toBe(['unsolicited', 'counted']);
+});
+
+test('the clerk maps the agent id, then re-ingests the refused Genie message, and it counts', function (): void {
+    $message = genieMessage('msg-1', MOIC_AGENT, replyText($this->petition));
+    $first = ingest()->receiveGenieMessage($message);
+    app('config')->set('council.genie.agent_addresses', [MOIC_AGENT => 'moic@moic-suite']);
+    $second = ingest()->receiveGenieMessage($message);
+
+    expect($first->problem)->toBe('unmapped_agent')
+        ->and($second->status)->toBe('counted');
+});
+
+test('replaying a refusal with the same sender is a duplicate, not a second refusal row', function (): void {
+    ingest()->receive('weaver@weaver', replyText($this->petition), 'msg-1');
+    $again = ingest()->receive('weaver@weaver', replyText($this->petition), 'msg-1');
+
+    expect($again->status)->toBe('duplicate')
+        ->and(Vote::query()->count())->toBe(1);
+});
+
+test('an ACCEPTED message id stays a replay whatever sender it is fed with', function (): void {
+    ingest()->receive('moic@moic-suite', replyText($this->petition), 'msg-1');
+    $again = ingest()->receive('weaver@weaver', replyText($this->petition), 'msg-1');
+    vote($this->change, 'moic@moic-suite', 'conflict', messageId: 'msg-2');
+    $old = ingest()->receive('moic@moic-suite', replyText($this->petition), 'msg-1');
+
+    expect($again->status)->toBe('duplicate')
+        // superseded is still an accepted vote: re-feeding it never brings it back
+        ->and($old->status)->toBe('duplicate')
+        ->and($this->petition->fresh()->outcome)->toBe('conflict')
+        ->and(Vote::query()->count())->toBe(2);
+});

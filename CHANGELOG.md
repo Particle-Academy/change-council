@@ -16,6 +16,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-18
+
+**Consumer action:** run `php artisan migrate` (one additive migration). If
+your clerk pipes raw Genie messages (`--genie-json`), map your members' Genie
+agent ids in `council.genie.agent_addresses` (below), or their replies keep
+being refused. A host that published the package's migrations
+(`--tag=council-migrations`) must publish the new one too. The pages are
+unchanged.
+
+### Fixed
+
+- **`council:ingest --genie-json` (and `council:census-ingest`) could never
+  match a sender.** Genie stamps a raw message's `from` with the sender's agent
+  id (`agent_<hex>`), not the `name@workspace` address the petition or census
+  request was sent to, so every reply piped this way was stored as
+  `unsolicited (sender_mismatch)`. Six genuine replies to CC-fancy-0043 were
+  refused like this. The sender is now resolved by the new
+  `Support\GenieMessage`: an address field on the message (`fromAddress`) when
+  it is a valid `name@workspace` (Genie sends none today; a malformed one is
+  ignored), else the host's new map `council.genie.agent_addresses`
+  (agent id => address, validated at boot; a bad entry throws, naming it),
+  else `from` as it is. **The sender check itself is unchanged**: the resolved
+  sender must equal the petitioned address exactly, and a mapped id that maps
+  to another member is still `sender_mismatch`. An agent id nobody mapped is now
+  refused as `unsolicited (unmapped_agent)`, so the clerk can see what to fix.
+  The clerk procedure is in `docs/petitions.md` ("The sender: Genie agent
+  ids"). The same map applies to `--from=` when it is given an agent id.
+- **A refused ingest no longer consumes its message id.** `genie_message_id`
+  was unique, so a refusal (a wrong sender, a malformed reply) blocked the same
+  genuine message from ever being re-ingested: the corrected attempt came back
+  as `duplicate vote N`. Replay protection now keys on accepted rows only: a new
+  unique, nullable `accepted_message_id` is set on a counted or late vote (kept
+  when it is later superseded) and on an applied census reply, and the
+  migration backfills it for existing accepted rows. Refusals are still stored
+  with their raw text and audited, under a plain index on `genie_message_id`.
+  The same message id from the same sender again is still a `duplicate`, so
+  replaying a refusal adds no rows. The database still refuses a second
+  accepted copy of one message.
+
+  **What you must do:** run the migration. It rewrites no existing value and
+  deletes nothing. Its `down()` fails once a message id has both a refusal and
+  an accepted row, which is the case this fixes.
+- Genie's timestamp field is `sentAt`, not `at`, so every ingested reply's
+  `received_at` was the time of ingest. `sentAt` is now read when `at` is
+  absent.
+
 ## [0.9.0] - 2026-11-18
 
 **Consumer action:** re-publish the pages

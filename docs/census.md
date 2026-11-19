@@ -13,7 +13,7 @@ php artisan council:census-requests --json   # queues one request per member, th
 # for each: agentinbox send to=<to> text=<text>, then record the raw tool result:
 php artisan council:census-requests --mark-sent=<request> --result='<raw tool JSON>'
 # replies: for each message whose text starts with COUNCIL-CENSUS v1
-php artisan council:census-ingest --genie-json --file=message.json   # {id, from, at, text}, unaltered
+php artisan council:census-ingest --genie-json --file=message.json   # {id, from, text, sentAt}, unaltered
 ```
 
 - Running `council:census-requests` queues a request for every **active,
@@ -104,8 +104,12 @@ one `-`) before the prefix check.
 The sender is the Genie-stamped `from`, never a field in the reply. The reply is
 bound to its request by `nonce`: an unknown nonce or another member's nonce is
 `unsolicited`; a request is answered once (`already_answered`); a member
-removed since the request is refused (`member_removed`). The Genie message id
-makes a replay a no-op.
+removed since the request is refused (`member_removed`). The sender is resolved
+from Genie's agent id exactly as for a vote (`council.genie.agent_addresses`;
+an unmapped one is `unmapped_agent`, see [petitions](petitions.md#the-sender-genie-agent-ids)).
+An APPLIED reply's message id makes a replay a no-op; a refused one does not
+consume the id, so the same message can be re-ingested once the sender is
+mapped.
 
 A valid census:
 

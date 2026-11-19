@@ -9,6 +9,7 @@ use ChangeCouncil\Models\CensusReply;
 use ChangeCouncil\Models\CensusRequest;
 use ChangeCouncil\Models\Consumer;
 use ChangeCouncil\Petitions\Sanitiser;
+use ChangeCouncil\Support\GenieMessage;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Carbon;
 
@@ -30,26 +31,32 @@ use Illuminate\Support\Carbon;
  */
 final class CensusIngest
 {
-    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly ?FirstParty $firstParty = null) {}
+    /** @param array<string, string> $agents the host's Genie agent id => address map ({@see GenieMessage}) */
+    public function __construct(private readonly ConnectionInterface $db, private readonly AuditLog $audit, private readonly ?FirstParty $firstParty = null, private readonly array $agents = []) {}
 
-    /** The raw message JSON from `agentinbox receive`: {id, from, at, text}. */
+    /** The raw message JSON from `agentinbox receive`: {id, from, text, sentAt} (or `at`). */
     public function receiveGenieMessage(string $json): CensusResult
     {
-        $message = json_decode($json, true);
-        if (! is_array($message) || ! is_string($message['from'] ?? null) || ! is_string($message['text'] ?? null)) {
-            throw new \InvalidArgumentException('Expected the raw Genie message JSON: {"id", "from", "at", "text"}.');
-        }
+        $message = GenieMessage::read($json, $this->agents);
 
-        return $this->receive($message['from'], $message['text'], is_scalar($message['id'] ?? null) ? (string) $message['id'] : null, is_string($message['at'] ?? null) ? $message['at'] : null);
+        return $this->receive($message['from'], $message['text'], $message['id'], $message['at']);
     }
 
     public function receive(string $from, string $text, ?string $messageId = null, ?string $at = null): CensusResult
     {
+        $from = GenieMessage::resolve($from, $this->agents);
         $messageId ??= 'sha256:'.hash('sha256', $from."\n".$text);
 
         return $this->db->transaction(function () use ($from, $text, $messageId, $at): CensusResult {
-            if (CensusReply::query()->where('genie_message_id', $messageId)->exists()) {
-                return new CensusResult('duplicate', CensusReply::query()->where('genie_message_id', $messageId)->first());
+            // Replay keys on APPLIED replies only, as in Petitions\Ingest: a
+            // refusal is kept for audit and does not consume the message id.
+            $applied = CensusReply::query()->where('accepted_message_id', $messageId)->first();
+            if ($applied !== null) {
+                return new CensusResult('duplicate', $applied);
+            }
+            $refused = CensusReply::query()->where('genie_message_id', $messageId)->where('from_address', $from)->latest('id')->first();
+            if ($refused !== null) {
+                return new CensusResult('duplicate', $refused);
             }
             if (strlen($text) > CensusParser::MAX_BYTES) {
                 // Kept, but only up to the cap: an oversized message is a way to fill the ledger.
@@ -67,7 +74,7 @@ final class CensusIngest
             }
             if ($request->agent_address !== $from) {
                 // The nonce was someone else's request: refused, never applied.
-                return $this->store($messageId, $from, $text, $at, null, 'unsolicited', 'sender_mismatch', $census);
+                return $this->store($messageId, $from, $text, $at, null, 'unsolicited', GenieMessage::isAgentId($from) ? 'unmapped_agent' : 'sender_mismatch', $census);
             }
             if ($request->answered_at !== null) {
                 return $this->store($messageId, $from, $text, $at, $request, 'invalid', 'already_answered', $census);
@@ -123,6 +130,7 @@ final class CensusIngest
         $reply = CensusReply::query()->create([
             'request_id' => $request?->id,
             'genie_message_id' => $messageId,
+            'accepted_message_id' => $status === 'applied' ? $messageId : null,
             'from_address' => $from,
             'apps' => $census === null ? [] : array_map(fn (array $a) => [
                 'name' => Sanitiser::clean($a['name']),

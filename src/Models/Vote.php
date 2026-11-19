@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property array $flags
  * @property string $status counted | invalid | unsolicited | superseded | late
  * @property ?string $problem
+ * @property ?string $accepted_message_id set only on an accepted (counted/late) vote; unique
  */
 final class Vote extends Model
 {

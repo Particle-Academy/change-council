@@ -95,6 +95,22 @@ return [
     ],
 
     /*
+    | Genie stamps a message's `from` with the sender's AGENT ID
+    | (`agent_<hex>`), not the `name@workspace` address petitions and census
+    | requests are sent to. Map each member's agent id to its address here, or
+    | `council:ingest --genie-json` refuses its replies as `unmapped_agent`.
+    | A mapped id must still match the petitioned address exactly.
+    |
+    | Validated at boot: a key that is not `agent_<id>`, or a value that is not
+    | `name@workspace`, throws, naming the entry.
+    */
+    'genie' => [
+        'agent_addresses' => [
+            // 'agent_81bb07b176c871d7e70d4c45afed1cf1' => 'tynn@tynn',
+        ],
+    ],
+
+    /*
     | Who may initiate straight into round 1. Everything else lands in
     | `awaiting_owner` (HITL) with a pros/cons summary, and no petition goes out
     | until the owner approves. A GitHub issue counts as whitelisted only when
