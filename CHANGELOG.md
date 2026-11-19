@@ -16,6 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- CI: re-pin org third-party allowlist to 2614224
+
 ## [0.9.1] - 2026-11-18
 
 **Consumer action:** run `php artisan migrate` (one additive migration). If
