@@ -18,6 +18,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.9.3] - 2026-11-23
 
+**Consumer action:** re-publish the pages
+(`php artisan vendor:publish --tag=council-pages --force`), then
+`php artisan council:pages-check` reports 9 of 9 current. Until then a host
+keeps drawing the old Audit tab, which still works. No migration, and the audit
+log's data does not change.
+
+### Changed
+
+- **The Audit tab on `Council/Show` is readable.** Each event is a row with its
+  time, a plain title ("Owner approved with passkey", "Vote: approve from
+  moic"), actor, a status badge and one summary line; the sequence number and
+  hash stay visible but quiet. Owner decisions and votes are marked apart from
+  system events, and a filter shows All, Decisions, Votes or System. Details are
+  collapsed by default and show readable facts (for a step-up: method, action,
+  verified at, verified by, user present, user verified). The full record is
+  behind a second **Raw record** disclosure, wrapped and scrollable, with a copy
+  button, so nothing the owner could inspect is gone. Passkey credential
+  material is no longer drawn in the default view. The words come from the new
+  `parts/audit.ts`, which covers every event type the ledger writes and gives an
+  unknown type a safe generic summary.
+
 ## [0.9.2] - 2026-11-23
 
 **Consumer action:** re-publish the pages

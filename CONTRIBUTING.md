@@ -168,6 +168,12 @@ Hosts publish COPIES of these files; `Laravel\PublishedPages` and
 `council:pages-check` compare a host's copy with the shipped one, so any
 change here is a "re-publish the pages" line in the CHANGELOG.
 
+`parts/audit.ts` words the Audit tab. A new audit event type needs a handler
+there and a case in `tests/Unit/AuditViewTest.php`, which reads the types out of
+`src/` and runs the real helper under Node. Keep it free of runtime imports
+other than `./tone`, and keep credential material out of its facts: the full
+event belongs only in `rawAuditRecord()`.
+
 ## Tests
 
 - `node --test "council/test/*.test.mjs"`: fixture git repos built per test,

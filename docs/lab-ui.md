@@ -48,7 +48,9 @@ Two Inertia pages, built only from Fancy components (react-fancy: `Table`,
   injection flags, and the raw reply in a read-only `CodeView`), Evidence
   (detector findings, waived ones labelled), Silence policy (consumer-wide and
   per-Change override per petitioned agent), and Audit (the hash-chained log as a
-  `Timeline`).
+  `Timeline` of readable rows: time, title, actor, status, one summary line, with
+  an All / Decisions / Votes / System filter; **Details** opens the facts, and
+  **Raw record** inside it opens the whole event with a copy button).
 
 ## Safety properties (source-checked by `tests/Unit/PagesTest.php`)
 
