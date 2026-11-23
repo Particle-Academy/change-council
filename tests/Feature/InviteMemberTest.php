@@ -235,3 +235,23 @@ test('the Index page gets the invite endpoint', function (): void {
 
     expect($page['body']['props']['endpoints']['invite'] ?? null)->toBe('/council/api/v1/members');
 });
+
+/*
+ * 0.9.2: the invite form moved to the Members page, where the owner looks for
+ * it. The page gets the endpoint it posts to and the owner flag that draws it;
+ * a viewer gets the flag false, and the API refuses the viewer anyway.
+ */
+test('the Members page gets the invite endpoint, and the owner flag that draws the form', function (): void {
+    $owner = inviteApp(fn (mixed $user, string $ability): bool => $ability === 'view' || $user->email === 'ada@example.com');
+    $viewer = User::create(['name' => 'Eve', 'email' => 'eve@example.com']);
+
+    $ownerPage = http('GET', '/members', null, $owner)['body'];
+    $viewerPage = http('GET', '/members', null, $viewer)['body'];
+
+    expect($ownerPage['component'])->toBe('Council/Members')
+        ->and($ownerPage['props']['endpoints']['invite'] ?? null)->toBe('/council/api/v1/members')
+        ->and($ownerPage['props']['canSetPolicy'])->toBeTrue()
+        ->and($viewerPage['props']['canSetPolicy'])->toBeFalse()
+        ->and(http('POST', '/api/v1/members', ['address' => INVITEE], $viewer)['status'])->toBe(403)
+        ->and(Consumer::query()->where('address', INVITEE)->exists())->toBeFalse();
+});

@@ -16,9 +16,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+**Consumer action:** re-publish the pages
+(`php artisan vendor:publish --tag=council-pages --force`), then
+`php artisan council:pages-check` reports 8 of 8 current. Until then a host
+keeps drawing the old form on the council page, which still works: `Council/Index`
+is still sent `endpoints.invite`. No migration.
+
 ### Changed
 
 - CI: re-pin org third-party allowlist to 2614224
+- **"Invite agent" moved to the Members page** (`{prefix}/members`), where the
+  owner looks for it. The form, its fields, the step-up (passkey) flow, the
+  validation, the success and refusal wording, the `data-*` handles and the
+  owner-only gate are unchanged; it sits under `#invite`, and a visit to
+  `{prefix}/members#invite` opens it. The council page (`Council/Index`) keeps
+  an owner-only **Invite agent** button that links there, and no second form.
+  The form's logic is now `parts/invite.ts` (`useInvite`, `inviteMessage`), a
+  new shipped file. `Council/Members` is sent `endpoints.invite` and draws the
+  form only when `canSetPolicy` is true; the API asks the `owner` hook again on
+  the POST either way. A host test that read the form's handles out of
+  `Index.tsx` must read `Members.tsx` instead.
 
 ## [0.9.1] - 2026-11-18
 

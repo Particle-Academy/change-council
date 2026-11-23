@@ -75,7 +75,7 @@ test('council:pages-check exits 0 on a current copy and 1 on a stale one, and sa
     [$absent, $absentOutput] = runCommandWithCode('council:pages-check', ['--path' => $copy.'/nope']);
 
     expect($ok)->toBe(0)
-        ->and($okOutput)->toContain('7 of 7 current')
+        ->and($okOutput)->toContain('8 of 8 current')
         ->and($stale)->toBe(1)
         ->and($staleOutput)->toContain('stale   Index.tsx')
         ->and($staleOutput)->toContain('vendor:publish --tag=council-pages --force')

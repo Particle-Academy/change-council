@@ -25,7 +25,7 @@ function pageSources(): array
 }
 
 test('every page exists', function (): void {
-    expect(array_keys(pageSources()))->toContain('Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx', 'nav.ts');
+    expect(array_keys(pageSources()))->toContain('Index.tsx', 'Show.tsx', 'Members.tsx', 'Member.tsx', 'nav.ts', 'invite.ts');
 });
 
 test('every page draws the Council nav, with Members in it', function (): void {
@@ -87,20 +87,52 @@ test('the profile has an owner-only "Remove from council" control, staged behind
  * host's step-up handler runs), and words the result from the answer: there is
  * no accept/decline, only the census request's state.
  */
-test('the council page has an owner-only "Invite agent" form that posts to the invite endpoint', function (): void {
+/*
+ * 0.9.2: the owner looks for "Invite agent" on the Members page, so the form
+ * lives there. Its logic (validation, the POST through send(), the wording of
+ * the answer) is parts/invite.ts, the one copy; the page draws it only for an
+ * owner, at #invite, and opens it when the URL says #invite.
+ */
+test('the members page has an owner-only "Invite agent" form that posts to the invite endpoint', function (): void {
+    $members = pageSources()['Members.tsx'];
+    $invite = pageSources()['invite.ts'];
+
+    expect($members)->toContain('data-action="invite-agent"')
+        ->and($members)->toContain('data-action="submit-invite"')
+        ->and($members)->toContain('data-action="cancel-invite"')
+        ->and($members)->toContain('data-field="invite-address"')
+        ->and($members)->toContain('data-field="invite-weight"')
+        ->and($members)->toContain('data-field="invite-silence-policy"')
+        ->and($members)->toContain('data-field="invite-project-name"')
+        ->and($members)->toContain('data-testid="council-invite"')
+        ->and($members)->toContain('id="invite"')
+        ->and($members)->toMatch('/canSetPolicy\s*&&\s*\(?\s*<InviteAgent\b/')
+        ->and($members)->toMatch('/<Button data-action="invite-agent"/')
+        ->and($members)->toMatch('/useInvite\(\s*endpoints\.invite\b/')
+        ->and($members)->toContain("'#invite'")
+        ->and($members)->toContain('invite: string')
+        ->and($invite)->toMatch("/send<InviteAnswer>\\('POST',\\s*endpoint\\b/")
+        ->and($invite)->toContain('export function useInvite(')
+        ->and($invite)->toContain('export function inviteMessage(')
+        ->and($invite)->toContain('It is petitioned on nothing until it answers with its packages.')
+        ->and($invite)->toMatch('/refusal\(answer\)/');
+});
+
+test('the council page keeps an owner-only "Invite agent" link to the members page, and no second form', function (): void {
     $index = pageSources()['Index.tsx'];
 
-    expect($index)->toContain('data-action="invite-agent"')
-        ->and($index)->toContain('data-action="submit-invite"')
-        ->and($index)->toContain('data-action="cancel-invite"')
-        ->and($index)->toContain('data-field="invite-address"')
-        ->and($index)->toContain('data-field="invite-weight"')
-        ->and($index)->toContain('data-field="invite-silence-policy"')
-        ->and($index)->toContain('data-field="invite-project-name"')
-        ->and($index)->toContain('data-testid="council-invite"')
-        ->and($index)->toMatch("/send<[^>]*>\\('POST',\\s*endpoints\\.invite/")
-        ->and($index)->toMatch('/canSetPolicy\s*&&\s*\(\s*<Button data-action="invite-agent"/')
-        ->and($index)->toContain('invite: string');
+    expect($index)->toMatch('/canSetPolicy\s*&&\s*\(\s*<Button data-action="invite-agent"[^>]*href=\{`\$\{endpoints\.members\}#invite`\}/')
+        ->and($index)->not->toContain('data-testid="council-invite"')
+        ->and($index)->not->toContain('data-action="submit-invite"')
+        ->and($index)->not->toContain('data-field="invite-address"')
+        ->and($index)->not->toContain('useInvite')
+        ->and($index)->not->toMatch("/send<[^>]*>\\('POST'/");
+});
+
+test('the invite form is drawn in one place only', function (): void {
+    $drawn = array_keys(array_filter(pageSources(), static fn (string $source): bool => str_contains($source, 'data-testid="council-invite"')));
+
+    expect($drawn)->toBe(['Members.tsx']);
 });
 
 test('the members list shows removed members apart, under Former members', function (): void {

@@ -46,7 +46,9 @@ final class PageController
                 'consumers' => $this->url('api/v1/consumers'),
                 'index' => $this->url(''),
                 'members' => $this->url('members'),
-                // POST here invites an agent (owner only, behind the step-up gate).
+                // The invite form moved to the Members page in 0.9.2. Kept so a
+                // host still drawing an older published Index keeps working
+                // until it re-publishes the pages.
                 'invite' => $this->url('api/v1/members'),
             ],
         ]);
@@ -89,7 +91,8 @@ final class PageController
             'pollMs' => $this->pollMs(),
             'host' => $this->host(),
             'showNav' => $this->showNav(),
-            // Draws the threshold control. Display only: the PUT asks the hook again.
+            // Draws the threshold control and the invite form. Display only:
+            // the PUT and the POST ask the hook again.
             'canSetPolicy' => $this->authorizer->allows($request->user(), 'owner', ['ref' => null, 'address' => null]),
             'endpoints' => [
                 'index' => $this->url(''),
@@ -97,6 +100,8 @@ final class PageController
                 'api' => $this->url('api/v1/members'),
                 'threshold' => $this->url('api/v1/settings/blocking-threshold'),
                 'show' => $this->url('changes'),
+                // 0.9.2: POST here invites an agent (owner only, behind the step-up gate).
+                'invite' => $this->url('api/v1/members'),
             ],
         ]);
     }

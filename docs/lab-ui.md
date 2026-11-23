@@ -10,16 +10,19 @@ Two Inertia pages, built only from Fancy components (react-fancy: `Table`,
   the clerk; the consumer registry with census age and each consumer's silence
   policy, which an owner sets right there (a `Select` drawn only when the hook
   allows `owner`; the API asks the hook again on the write). It covers every
-  consumer, including one no Change has petitioned yet. An owner also gets
-  **Invite agent** (0.9.0): an address (`name@workspace`), a weight, a silence
-  policy and an optional project name, posted to `POST {prefix}/api/v1/members`
-  through the step-up gate. The answer is worded from the census request the
-  invitation queued; there is no accept or decline.
+  consumer, including one no Change has petitioned yet. An owner also gets an
+  **Invite agent** button here, which goes to the form on the Members page
+  (`{prefix}/members#invite`).
 - **`Council/Members`** (`{prefix}/members`): every council member (consumer
   row) in a sortable `Table`: name and address, project and workspace, weight,
   silence policy, declared package count, votes cast, approve/conflict/abstain,
   missed petitions, last vote and census. An owner sets the council's blocking
-  threshold here (`NumberField`). Members the owner removed are listed apart,
+  threshold here (`NumberField`), and invites an agent (**Invite agent**, at
+  `#invite`; on this page since 0.9.2, on `Council/Index` in 0.9.0 and 0.9.1):
+  an address (`name@workspace`), a weight, a silence policy and an optional
+  project name, posted to `POST {prefix}/api/v1/members` through the step-up
+  gate. The answer is worded from the census request the invitation queued;
+  there is no accept or decline. A visit to `#invite` opens the form. Members the owner removed are listed apart,
   under **Former members**, with their removal date and votes.
 - **`Council/Member`** (`{prefix}/members/{address}`): one member. Project (name,
   description, URL, workspace, declared and watched packages, internal flag,

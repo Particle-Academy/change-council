@@ -320,7 +320,7 @@ test('the members pages render Council/Members and Council/Member with their pro
         ->and($list['props']['members'][0]['address'])->toBe('moic@moic-suite')
         ->and($list['props']['blocking_threshold'])->toBe(['value' => 1, 'source' => 'config'])
         ->and($list['props']['canSetPolicy'])->toBeTrue()
-        ->and($list['props']['endpoints'])->toBe(['index' => '/council', 'members' => '/council/members', 'api' => '/council/api/v1/members', 'threshold' => '/council/api/v1/settings/blocking-threshold', 'show' => '/council/changes'])
+        ->and($list['props']['endpoints'])->toBe(['index' => '/council', 'members' => '/council/members', 'api' => '/council/api/v1/members', 'threshold' => '/council/api/v1/settings/blocking-threshold', 'show' => '/council/changes', 'invite' => '/council/api/v1/members'])
         ->and($one['component'])->toBe('Council/Member')
         ->and($one['props']['detail']['member']['address'])->toBe('moic@moic-suite')
         ->and($one['props']['detail']['record'])->toHaveCount(1)
