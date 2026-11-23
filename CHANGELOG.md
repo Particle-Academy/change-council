@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-23
+
 **Consumer action:** re-publish the pages
 (`php artisan vendor:publish --tag=council-pages --force`), then
 `php artisan council:pages-check` reports 8 of 8 current. Until then a host
